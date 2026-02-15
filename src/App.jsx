@@ -426,7 +426,7 @@ export default function App() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [showConverter, setShowConverter] = useState(false);
-    const [showChart, setShowChart] = useState(true);
+    const [showChart, setShowChart] = useState(false);
 
     // 0. Inject Tailwind CSS CDN
     useEffect(() => {
