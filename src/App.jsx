@@ -251,9 +251,16 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
     }, [initialData]);
 
     const handlePhoto = async (e) => {
-        if (e.target.files[0]) {
-            const compressed = await compressImage(await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(e.target.files[0]); }));
-            setPhoto(compressed);
+        const file = e.target.files[0];
+        if (file) {
+            try {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const compressed = await compressImage(reader.result);
+                    setPhoto(compressed);
+                };
+                reader.readAsDataURL(file);
+            } catch(e) { console.error(e); }
         }
     };
 
@@ -446,16 +453,17 @@ export default function App() {
     useEffect(() => {
         if (!user) return;
         // Path: artifacts/{appId}/users/{uid}/gold_transactions
-        // Flat structure, no books.
+        // Simplified Query: Only sort by date to avoid composite index requirement
         const q = query(
             collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'),
-            orderBy('date', 'desc'),
-            orderBy('createdAt', 'desc')
+            orderBy('date', 'desc')
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setTransactions(data);
+        }, (error) => {
+            console.error("Firestore Error:", error);
         });
         return () => unsubscribe();
     }, [user]);
