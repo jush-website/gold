@@ -13,7 +13,7 @@ import {
   Calculator, ChevronDown, ChevronUp, Moon, Coffee, 
   Loader2, LogOut, Plus, Trash2, Tag, Calendar,
   BarChart3, Pencil, X, AlertCircle, RefreshCw, Camera,
-  ShieldCheck, User
+  ShieldCheck, User, Store
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -152,7 +152,7 @@ const LoginView = () => {
 
 // --- Sub-Components ---
 
-// 1. Chart (Optimized)
+// 1. Chart
 const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod }) => {
     const containerRef = useRef(null);
     const [hoverData, setHoverData] = useState(null);
@@ -236,12 +236,13 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     );
 };
 
-// 2. Add Gold Modal
+// 2. Add Gold Modal (Updated with Location)
 const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [unit, setUnit] = useState('g'); 
     const [weightInput, setWeightInput] = useState(initialData?.weight ? initialData.weight.toString() : '');
     const [totalCost, setTotalCost] = useState(initialData?.totalCost?.toString() ?? '');
+    const [location, setLocation] = useState(initialData?.location || '');
     const [note, setNote] = useState(initialData?.note || '');
     const [photo, setPhoto] = useState(initialData?.photo || null);
 
@@ -269,7 +270,7 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
         if (isNaN(w) || w <= 0) return;
         if (unit === 'tw_qian') w = w * 3.75;
         if (unit === 'tw_liang') w = w * 37.5;
-        onSave({ date, weight: w, totalCost: parseFloat(totalCost) || 0, note, photo });
+        onSave({ date, weight: w, totalCost: parseFloat(totalCost) || 0, location, note, photo });
     };
 
     return (
@@ -305,7 +306,18 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
                             <input type="number" inputMode="numeric" value={totalCost} onChange={e => setTotalCost(e.target.value)} placeholder="0" className="bg-transparent text-3xl font-black text-gray-800 w-full outline-none" />
                         </div>
                     </div>
-                    <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="備註 (例: 送禮)" className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold outline-none border border-gray-100" />
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 focus-within:border-blue-300 transition-colors">
+                            <label className="text-[10px] font-bold text-gray-400 mb-1 block">購買地點</label>
+                            <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="例: 台銀" className="bg-transparent w-full text-sm font-bold outline-none" />
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 focus-within:border-blue-300 transition-colors">
+                            <label className="text-[10px] font-bold text-gray-400 mb-1 block">備註</label>
+                            <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="例: 送禮" className="bg-transparent w-full text-sm font-bold outline-none" />
+                        </div>
+                    </div>
+
                     <label className="block w-full h-24 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-50 relative overflow-hidden transition-colors">
                         {photo ? <><img src={photo} className="absolute inset-0 w-full h-full object-cover opacity-60" /><div className="relative z-10 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> 更換</div></> : <><Camera size={24} className="mb-1 text-gray-300"/><span className="text-xs font-bold">上傳照片</span></>}
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
@@ -657,7 +669,11 @@ export default function App() {
                                             <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center border border-yellow-100"><Scale size={18}/></div>}
                                             <div>
                                                 <div className="font-bold text-gray-800 text-base">{formatWeight(weightG)}</div>
-                                                <div className="text-xs text-gray-400 mt-0.5">{t.date} {t.note && `• ${t.note}`}</div>
+                                                <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                                                    {t.date} 
+                                                    {t.location && <span className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px] text-gray-500">{t.location}</span>}
+                                                    {t.note && <span>• {t.note}</span>}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
