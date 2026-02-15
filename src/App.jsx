@@ -512,11 +512,14 @@ export default function App() {
     };
 
     const handleDelete = async (id) => {
-        if (!user || !confirm("確定要刪除這筆紀錄嗎？無法復原。")) return;
-        try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id));
-            setShowAddModal(false);
-        } catch(e) { console.error(e); }
+        if (!user) return;
+        // Use standard confirm window
+        if (window.confirm("確定要刪除這筆紀錄嗎？")) {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id));
+                setShowAddModal(false); // Close modal if open
+            } catch(e) { console.error("Delete error:", e); }
+        }
     };
 
     // 4. Calculations
@@ -648,7 +651,7 @@ export default function App() {
                                 const itemVal = weightG * goldPrice;
                                 const itemProfit = itemVal - cost;
                                 return (
-                                    <div key={t.id} onClick={() => { setEditingItem(t); setShowAddModal(true); }} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer group flex justify-between items-center">
+                                    <div key={t.id} onClick={() => { setEditingItem(t); setShowAddModal(true); }} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer group flex justify-between items-center relative">
                                         <div className="flex items-center gap-3">
                                             {t.photo ? <img src={t.photo} className="w-10 h-10 rounded-xl object-cover border border-gray-100 shadow-sm"/> : 
                                             <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center border border-yellow-100"><Scale size={18}/></div>}
@@ -657,11 +660,20 @@ export default function App() {
                                                 <div className="text-xs text-gray-400 mt-0.5">{t.date} {t.note && `• ${t.note}`}</div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className={`font-bold text-sm ${itemProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                {itemProfit >= 0 ? '+' : ''}{formatMoney(itemProfit)}
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-right">
+                                                <div className={`font-bold text-sm ${itemProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {itemProfit >= 0 ? '+' : ''}{formatMoney(itemProfit)}
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-0.5">成本: {formatMoney(t.totalCost)}</div>
                                             </div>
-                                            <div className="text-[10px] text-gray-400 mt-0.5">成本: {formatMoney(t.totalCost)}</div>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                                                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-10"
+                                                title="刪除紀錄"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
                                         </div>
                                     </div>
                                 );
