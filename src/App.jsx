@@ -3,18 +3,17 @@ import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy, where, writeBatch
+  query, orderBy
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-} from 'firebase/auth'; // Removed signInAnonymously
+} from 'firebase/auth';
 import { 
   Coins, TrendingUp, TrendingDown, RefreshCcw, Scale, 
   Calculator, ChevronDown, ChevronUp, Moon, Coffee, 
   Loader2, LogOut, Plus, Trash2, Tag, Calendar,
   BarChart3, Pencil, X, AlertCircle, RefreshCw, Camera,
-  ArrowRight, ShieldCheck, Lock, User, Folder, FolderPlus,
-  ArrowLeft, LayoutGrid, MoreVertical
+  ShieldCheck, User
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -35,7 +34,7 @@ const formatMoney = (amount) => {
   return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(num);
 };
 
-const formatWeight = (grams, unit = 'tw_liang') => { 
+const formatWeight = (grams, unit = 'tw_qian') => { 
     const num = Number(grams);
     if (isNaN(num)) return '0.00';
     if (unit === 'tw_qian') {
@@ -81,8 +80,7 @@ const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
 // --- COMPONENTS ---
 
-// 1. Loading Screen (Updated with Inline Styles to prevent FOUC)
-// 使用 style 屬性直接定義顏色，這樣在 Tailwind 載入前背景就是黑的，不會閃爍白畫面
+// 1. Loading Screen
 const AppLoading = () => (
   <div style={{
       position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column',
@@ -94,12 +92,12 @@ const AppLoading = () => (
             <Coins size={24} className="text-yellow-500" />
         </div>
     </div>
-    <h2 className="mt-4 text-xl font-bold tracking-wider text-yellow-500" style={{fontFamily: 'sans-serif'}}>GOLD BOOKS</h2>
-    <p className="text-gray-400 text-sm mt-2" style={{color: '#9CA3AF'}}>正在啟動系統...</p>
+    <h2 className="mt-4 text-xl font-bold tracking-wider text-yellow-500" style={{fontFamily: 'sans-serif'}}>GOLD TRACKER</h2>
+    <p className="text-gray-400 text-sm mt-2" style={{color: '#9CA3AF'}}>載入您的金庫中...</p>
   </div>
 );
 
-// 2. Login View (Guest Login Removed)
+// 2. Login View
 const LoginView = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -111,7 +109,7 @@ const LoginView = () => {
             await signInWithPopup(auth, googleProvider);
         } catch (err) {
             if (err.code === 'auth/unauthorized-domain') {
-                setError('網域未授權：請至 Firebase Console > Authentication > Settings > Authorized domains 新增您的 Vercel 網址。');
+                setError('網域未授權：請至 Firebase Console > Authentication > Settings > Authorized domains 新增此網址。');
             } else if (err.code === 'auth/popup-closed-by-user') {
                 setError('登入視窗已關閉');
             } else {
@@ -121,16 +119,15 @@ const LoginView = () => {
         }
     };
 
-    // 使用 inline style 確保背景圖片載入前也是深色
     return (
         <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{backgroundColor: '#111827'}}>
-             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl"></div>
+             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
              <div className="relative z-10 w-full max-w-md bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 p-8 rounded-3xl shadow-2xl text-center">
-                <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/20 transform rotate-3">
-                    <Folder size={40} className="text-white" />
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20 transform rotate-3">
+                    <Coins size={40} className="text-white" />
                 </div>
-                <h1 className="text-3xl font-black text-white mb-2">黃金帳本</h1>
-                <p className="text-gray-400 mb-8">管理您的多個黃金資產組合</p>
+                <h1 className="text-3xl font-black text-white mb-2">黃金存摺</h1>
+                <p className="text-gray-400 mb-8">專屬於您的黃金資產管理</p>
                 
                 {error && (
                     <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2">
@@ -155,7 +152,7 @@ const LoginView = () => {
 
 // --- Sub-Components ---
 
-// 1. Chart (Same as before)
+// 1. Chart (Optimized)
 const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod }) => {
     const containerRef = useRef(null);
     const [hoverData, setHoverData] = useState(null);
@@ -189,38 +186,48 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
         setHoverData({ index, item: chartData[index], xPos: (index / (chartData.length - 1)) * 100 });
     };
 
-    const isMarketClosed = period === '1d' && (new Date().getDay() === 0 || new Date().getDay() === 6);
+    // 判斷週末休市
+    const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
+    const isMarketClosed = period === '1d' && isWeekend;
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative z-0">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative z-0 transition-all duration-300">
             <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={toggleVisibility}>
                 <div>
                     <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm font-bold text-gray-400">目前金價</span>
-                        {isMarketClosed && <Moon size={12} className="text-orange-400"/>}
+                        <span className="text-sm font-bold text-gray-400 flex items-center gap-1">
+                            {isMarketClosed ? <><span className="w-2 h-2 rounded-full bg-orange-400"></span>休市中</> : <><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>賣出金價</>}
+                        </span>
                     </div>
-                    <div className="text-3xl font-black text-gray-800">{formatMoney(goldPrice)}</div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight flex items-baseline gap-2">
+                        {formatMoney(goldPrice)} <span className="text-sm text-gray-400 font-normal">/克</span>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                         <span className="text-[10px] bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded border border-yellow-100 font-bold">{formatMoney(goldPrice * 3.75)} /錢</span>
+                         <span className="text-[10px] bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-100 font-bold">{formatMoney(goldPrice * 1000)} /公斤</span>
+                    </div>
                 </div>
                 {isVisible ? <ChevronUp size={20} className="text-gray-300"/> : <ChevronDown size={20} className="text-gray-300"/>}
             </div>
             {isVisible && (
-                <div className="px-5 pb-5">
-                    {loading ? <div className="h-32 flex items-center justify-center text-gray-300"><Loader2 className="animate-spin"/></div> :
-                     chartData.length === 0 ? <div className="h-32 flex items-center justify-center text-gray-300">無數據</div> :
+                <div className="px-5 pb-5 animate-[fadeIn_0.3s]">
+                    {loading ? <div className="h-32 flex items-center justify-center text-gray-300 text-xs"><Loader2 className="animate-spin mr-2"/> 載入數據...</div> :
+                     chartData.length === 0 ? <div className="h-32 flex items-center justify-center text-gray-300 text-xs">無數據</div> :
                     <div className="h-32 w-full relative" ref={containerRef} onMouseMove={handleMouseMove} onMouseLeave={() => setHoverData(null)} onTouchMove={(e)=>handleMouseMove(e.touches[0])}>
                          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                             <polyline fill="none" stroke="#eab308" strokeWidth="2" points={getPoints()} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
                             {hoverData && <line x1={hoverData.xPos} y1="0" x2={hoverData.xPos} y2="100" stroke="#ccc" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="4"/>}
                         </svg>
                         {hoverData && (
-                            <div className="absolute top-0 bg-gray-800 text-white text-[10px] p-1 rounded transform -translate-x-1/2 -translate-y-full pointer-events-none z-10" style={{left: `${hoverData.xPos}%`}}>
+                            <div className="absolute top-0 bg-gray-800 text-white text-[10px] p-1.5 rounded-lg shadow-lg transform -translate-x-1/2 -translate-y-full pointer-events-none z-10 font-bold" style={{left: `${hoverData.xPos}%`}}>
                                 {formatMoney(hoverData.item.price)}
+                                <div className="text-[8px] font-normal text-gray-400">{hoverData.item.label || hoverData.item.date}</div>
                             </div>
                         )}
                     </div>}
-                    <div className="flex justify-end gap-2 mt-2">
+                    <div className="flex justify-end gap-2 mt-4 bg-gray-50 p-1 rounded-xl inline-flex ml-auto w-full">
                         {['1d', '10d', '3m'].map(p => (
-                            <button key={p} onClick={(e)=>{e.stopPropagation(); setPeriod(p);}} className={`text-[10px] px-2 py-1 rounded-md font-bold ${period===p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>{p==='1d'?'今日':p==='10d'?'10日':'3月'}</button>
+                            <button key={p} onClick={(e)=>{e.stopPropagation(); setPeriod(p);}} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-bold transition-all ${period===p ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{p==='1d'?'即時':p==='10d'?'近10日':'近3月'}</button>
                         ))}
                     </div>
                 </div>
@@ -229,21 +236,7 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     );
 };
 
-// 2. Add Book Modal
-const AddBookModal = ({ onClose, onSave }) => {
-    const [name, setName] = useState('');
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.3s_ease-out]">
-                <h2 className="text-xl font-bold mb-4">新增帳本資料夾</h2>
-                <input autoFocus type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="例如: 保險箱、小孩教育金" className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 font-bold outline-none focus:border-yellow-400" />
-                <button onClick={() => name && onSave(name)} disabled={!name} className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold disabled:opacity-50">建立資料夾</button>
-            </div>
-        </div>
-    );
-};
-
-// 3. Add Gold Modal
+// 2. Add Gold Modal
 const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [unit, setUnit] = useState('g'); 
@@ -284,12 +277,12 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
                         <label className="text-xs font-bold text-gray-400 mb-1 block">購買日期</label>
                         <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent w-full text-sm font-bold outline-none" />
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-2xl border-2 border-transparent focus-within:border-yellow-400 transition-colors">
+                    <div className="bg-gray-50 p-4 rounded-2xl border-2 border-transparent focus-within:border-blue-400 transition-colors">
                         <div className="flex justify-between mb-2">
                             <label className="text-xs font-bold text-gray-400">重量</label>
                             <div className="flex bg-white rounded-lg p-0.5 shadow-sm">
                                 {[{id:'tw_qian', label:'錢'}, {id:'tw_liang', label:'兩'}, {id:'g', label:'克'}].map(u => (
-                                    <button key={u.id} onClick={()=>setUnit(u.id)} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${unit===u.id ? 'bg-yellow-500 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{u.label}</button>
+                                    <button key={u.id} onClick={()=>setUnit(u.id)} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${unit===u.id ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{u.label}</button>
                                 ))}
                             </div>
                         </div>
@@ -310,7 +303,7 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
                         {photo ? <><img src={photo} className="absolute inset-0 w-full h-full object-cover opacity-60" /><div className="relative z-10 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><RefreshCw size={12}/> 更換</div></> : <><Camera size={24} className="mb-1 text-gray-300"/><span className="text-xs font-bold">上傳照片</span></>}
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
                     </label>
-                    <button onClick={handleSubmit} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-lg shadow-gray-300 active:scale-95 transition-all text-lg">{initialData ? '儲存變更' : '確認入庫'}</button>
+                    <button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all text-lg hover:bg-blue-700">{initialData ? '儲存變更' : '確認入庫'}</button>
                     {initialData && onDelete && <button onClick={() => onDelete(initialData.id)} className="w-full py-3 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 flex items-center justify-center gap-2"><Trash2 size={18} /> 刪除紀錄</button>}
                 </div>
             </div>
@@ -353,7 +346,7 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
                 className="w-full p-4 flex items-center justify-between bg-gray-50/50 hover:bg-gray-100 transition-colors"
             >
                 <div className="flex items-center gap-2 font-bold text-gray-700">
-                    <Calculator size={18} className="text-yellow-600"/>
+                    <Calculator size={18} className="text-blue-600"/>
                     黃金計算機
                 </div>
                 {isVisible ? <ChevronUp size={18} className="text-gray-400"/> : <ChevronDown size={18} className="text-gray-400"/>}
@@ -368,7 +361,7 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
                                 value={amount} 
                                 onChange={(e) => setAmount(e.target.value)} 
                                 placeholder="0" 
-                                className="w-full bg-gray-50 text-2xl font-black text-gray-800 p-3 rounded-xl border-2 border-transparent focus:border-yellow-400 outline-none transition-colors"
+                                className="w-full bg-gray-50 text-2xl font-black text-gray-800 p-3 rounded-xl border-2 border-transparent focus:border-blue-400 outline-none transition-colors"
                             />
                         </div>
                         <select 
@@ -384,19 +377,19 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
                             <div className="text-[10px] text-gray-400 mb-1">價值 (TWD)</div>
                             <div className="font-black text-gray-800 text-lg">{formatMoney(displayValues.twd)}</div>
                         </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'tw_liang' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className={`p-3 rounded-xl border ${unit === 'tw_liang' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
                             <div className="text-[10px] text-gray-400 mb-1">台兩</div>
                             <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 3 }).format(displayValues.tw_liang)} <span className="text-xs font-normal text-gray-400">兩</span></div>
                         </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'tw_qian' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className={`p-3 rounded-xl border ${unit === 'tw_qian' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
                             <div className="text-[10px] text-gray-400 mb-1">台錢</div>
                             <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.tw_qian)} <span className="text-xs font-normal text-gray-400">錢</span></div>
                         </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'g' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className={`p-3 rounded-xl border ${unit === 'g' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
                             <div className="text-[10px] text-gray-400 mb-1">公克 (g)</div>
                             <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.g)} <span className="text-xs font-normal text-gray-400">克</span></div>
                         </div>
@@ -413,10 +406,8 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     
     // Data
-    const [books, setBooks] = useState([]);
-    const [allTransactions, setAllTransactions] = useState([]);
-    const [selectedBook, setSelectedBook] = useState(null); // null = List View, object = Detail View
-
+    const [transactions, setTransactions] = useState([]);
+    
     // Gold Price
     const [goldPrice, setGoldPrice] = useState(2880); 
     const [goldHistory, setGoldHistory] = useState([]);
@@ -425,8 +416,7 @@ export default function App() {
     const [priceLoading, setPriceLoading] = useState(false);
     
     // UI State
-    const [showAddBook, setShowAddBook] = useState(false);
-    const [showAddGold, setShowAddGold] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [showConverter, setShowConverter] = useState(false);
     const [showChart, setShowChart] = useState(true);
@@ -452,22 +442,22 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // 2. Data Listeners
+    // 2. Data Listeners (Direct transactions under user)
     useEffect(() => {
         if (!user) return;
-        // Fetch Books
-        const qBooks = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_books'), orderBy('createdAt', 'desc'));
-        const unsubBooks = onSnapshot(qBooks, (snap) => {
-            setBooks(snap.docs.map(d => ({id: d.id, ...d.data()})));
-        });
+        // Path: artifacts/{appId}/users/{uid}/gold_transactions
+        // Flat structure, no books.
+        const q = query(
+            collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'),
+            orderBy('date', 'desc'),
+            orderBy('createdAt', 'desc')
+        );
 
-        // Fetch All Transactions (We filter client side for smooth UX)
-        const qTrans = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), orderBy('date', 'desc'));
-        const unsubTrans = onSnapshot(qTrans, (snap) => {
-            setAllTransactions(snap.docs.map(d => ({id: d.id, ...d.data()})));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setTransactions(data);
         });
-
-        return () => { unsubBooks(); unsubTrans(); };
+        return () => unsubscribe();
     }, [user]);
 
     // 3. Actions
@@ -489,62 +479,45 @@ export default function App() {
         } catch (e) { console.error(e); } finally { setPriceLoading(false); }
     };
 
-    const handleCreateBook = async (name) => {
-        if(!user) return;
-        await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_books'), {
-            name, createdAt: serverTimestamp(), color: Math.floor(Math.random()*6)
-        });
-        setShowAddBook(false);
+    const handleLogout = async () => {
+        await signOut(auth);
     };
 
-    const handleDeleteBook = async (bookId, e) => {
-        e.stopPropagation();
-        if(!confirm("確定刪除此資料夾？裡面的紀錄也會一併刪除！")) return;
-        
-        const batch = writeBatch(db);
-        const transToDelete = allTransactions.filter(t => t.bookId === bookId);
-        transToDelete.forEach(t => {
-            batch.delete(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', t.id));
-        });
-        batch.delete(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_books', bookId));
-        await batch.commit();
-        if(selectedBook?.id === bookId) setSelectedBook(null);
-    };
-
-    const handleSaveGold = async (data) => {
-        if(!user || !selectedBook) return;
-        const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
-        const payload = { ...data, bookId: selectedBook.id, updatedAt: serverTimestamp() };
-        
-        if (editingItem) {
-            await updateDoc(doc(colRef, editingItem.id), payload);
-        } else {
-            await addDoc(colRef, { ...payload, createdAt: serverTimestamp() });
+    const handleSave = async (data) => {
+        if (!user) return;
+        try {
+            const payload = { ...data, updatedAt: serverTimestamp() };
+            // Path: artifacts/{appId}/users/{uid}/gold_transactions
+            const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
+            
+            if (editingItem) {
+                await updateDoc(doc(colRef, editingItem.id), payload);
+            } else {
+                await addDoc(colRef, { ...payload, createdAt: serverTimestamp() });
+            }
+            setShowAddModal(false);
+            setEditingItem(null);
+        } catch (e) {
+            console.error("Save failed:", e);
+            alert("儲存失敗，請檢查網路連線");
         }
-        setShowAddGold(false);
-        setEditingItem(null);
     };
 
-    const handleDeleteGold = async (id) => {
-        if (!confirm("確定刪除？")) return;
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id));
-        setShowAddGold(false);
+    const handleDelete = async (id) => {
+        if (!user || !confirm("確定要刪除這筆紀錄嗎？無法復原。")) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id));
+            setShowAddModal(false);
+        } catch(e) { console.error(e); }
     };
 
     // 4. Calculations
-    const getBookStats = (bookId) => {
-        const trans = bookId ? allTransactions.filter(t => t.bookId === bookId) : allTransactions;
-        const totalWeight = trans.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
-        const totalCost = trans.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
-        const currentValue = totalWeight * goldPrice;
-        const profit = currentValue - totalCost;
-        const roi = totalCost > 0 ? (profit / totalCost) * 100 : 0;
-        return { totalWeight, totalCost, currentValue, profit, roi, count: trans.length };
-    };
-
-    const globalStats = getBookStats(null); // All assets
-    const currentBookStats = selectedBook ? getBookStats(selectedBook.id) : null;
-    const currentTransactions = selectedBook ? allTransactions.filter(t => t.bookId === selectedBook.id) : [];
+    const totalWeight = transactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
+    const totalCost = transactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
+    const currentValue = totalWeight * goldPrice;
+    const profit = currentValue - totalCost;
+    const roi = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+    const avgCost = totalWeight > 0 ? totalCost / totalWeight : 0;
 
     // --- Render ---
     if (loading) return <AppLoading />;
@@ -554,181 +527,144 @@ export default function App() {
         <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
 
-            {/* HEADER - Dynamic based on view */}
-            <div className="bg-gray-900 text-white p-6 rounded-b-[2.5rem] shadow-2xl relative overflow-hidden mb-6 transition-all duration-500">
-                <div className="absolute top-0 right-0 w-40 h-40 bg-yellow-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+            {/* HEADER - Blue Dashboard Card */}
+            <div className="bg-white pb-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden mb-6">
+                {/* Background Gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-700"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none"></div>
                 
-                {/* Top Bar */}
-                <div className="flex justify-between items-center mb-6 relative z-10">
-                    {selectedBook ? (
-                        <button onClick={() => setSelectedBook(null)} className="flex items-center gap-1 text-gray-300 hover:text-white transition-colors">
-                            <ArrowLeft size={20} /> <span className="text-sm font-bold">返回列表</span>
-                        </button>
-                    ) : (
+                <div className="relative z-10 px-6 pt-6">
+                    {/* Top Bar */}
+                    <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
-                                <Folder size={20} className="text-white" />
+                            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/10">
+                                <Coins size={20} className="text-white" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-bold">我的帳本</h1>
-                                <p className="text-xs text-gray-400">{user.displayName}</p>
+                                <h1 className="text-lg font-bold text-white">我的黃金存摺</h1>
+                                <p className="text-xs text-blue-100 opacity-80">{user.displayName}</p>
                             </div>
                         </div>
-                    )}
-                    <button onClick={() => signOut(auth)} className="p-2 bg-white/10 rounded-full hover:bg-white/20"><LogOut size={18}/></button>
-                </div>
+                        <button onClick={handleLogout} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white">
+                            <LogOut size={18}/>
+                        </button>
+                    </div>
 
-                {/* Dashboard Stats */}
-                <div className="relative z-10 animate-[fadeIn_0.5s]">
-                    <div className="mb-2 text-gray-400 text-xs font-bold uppercase tracking-wider">
-                        {selectedBook ? `${selectedBook.name} 總值` : '總資產價值 (TWD)'}
+                    {/* Main Stats */}
+                    <div className="mb-1 text-blue-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                        總資產價值 (TWD) <button onClick={fetchGoldPrice} className="p-1 hover:bg-white/10 rounded-full"><RefreshCcw size={10} className={priceLoading ? "animate-spin" : ""}/></button>
                     </div>
                     <div className="text-4xl font-black mb-6 tracking-tight text-white drop-shadow-sm">
-                        {formatMoney(selectedBook ? currentBookStats.currentValue : globalStats.currentValue)}
+                        {formatMoney(currentValue)}
                     </div>
                     
-                    <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
-                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/5 min-w-[120px] flex-1">
-                             <div className="text-gray-400 text-[10px] mb-1">總重量</div>
-                             <div className="font-bold text-lg">{formatWeight(selectedBook ? currentBookStats.totalWeight : globalStats.totalWeight)}</div>
+                    {/* Secondary Stats Grid */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/5">
+                             <div className="text-blue-100 opacity-70 text-[10px] mb-1">持有重量 (台錢)</div>
+                             <div className="font-bold text-xl text-white flex items-end gap-1">
+                                 {formatWeight(totalWeight, 'tw_qian').replace('錢', '')}
+                                 <span className="text-xs font-medium mb-1 opacity-70">錢</span>
+                                 <span className="text-[10px] font-normal opacity-50 mb-1 ml-1">({formatWeight(totalWeight)})</span>
+                             </div>
                          </div>
-                         <div className={`backdrop-blur-md rounded-2xl p-3 border border-white/5 min-w-[120px] flex-1 ${(selectedBook ? currentBookStats.profit : globalStats.profit) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-                             <div className="text-gray-400 text-[10px] mb-1">損益</div>
-                             <div className={`font-bold text-lg ${(selectedBook ? currentBookStats.profit : globalStats.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                 {formatMoney(selectedBook ? currentBookStats.profit : globalStats.profit)}
+                         <div className={`backdrop-blur-md rounded-2xl p-4 border border-white/5 ${profit >= 0 ? 'bg-emerald-500/20' : 'bg-rose-500/20'}`}>
+                             <div className="text-blue-100 opacity-70 text-[10px] mb-1">預估損益</div>
+                             <div className={`font-bold text-xl flex items-center gap-1 ${profit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                 {profit >= 0 ? '+' : ''}{formatMoney(profit)}
                              </div>
                          </div>
                     </div>
+
+                    {/* Footer Stats */}
+                    <div className="flex justify-between items-center text-xs font-medium text-blue-100/60 px-1">
+                        <span>購入成本: {formatMoney(totalCost)}</span>
+                        <span>均價: {formatMoney(avgCost)}/g</span>
+                        <span className={`${profit >= 0 ? 'text-emerald-300' : 'text-rose-300'} font-bold`}>ROI: {roi.toFixed(2)}%</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="max-w-2xl mx-auto px-4">
+            <div className="max-w-2xl mx-auto px-4 space-y-5">
                 
-                {/* VIEW 1: BOOK LIST */}
-                {!selectedBook && (
-                    <div className="space-y-4 animate-[fadeIn_0.3s]">
-                        <div className="flex justify-between items-center mb-2">
-                            <h2 className="font-bold text-gray-700 flex items-center gap-2"><LayoutGrid size={18}/> 資料夾列表</h2>
-                            <button onClick={() => setShowAddBook(true)} className="bg-gray-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-gray-300 hover:scale-105 transition-transform"><FolderPlus size={14}/> 新增</button>
+                {/* 1. Add Button */}
+                <button 
+                    onClick={() => { setEditingItem(null); setShowAddModal(true); }}
+                    className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center justify-center gap-2 text-lg hover:bg-blue-700"
+                >
+                    <Plus size={24}/> 記一筆黃金
+                </button>
+
+                {/* 2. Converter */}
+                <GoldConverter 
+                    goldPrice={goldPrice}
+                    isVisible={showConverter}
+                    toggleVisibility={() => setShowConverter(!showConverter)}
+                />
+
+                {/* 3. Gold Price Chart */}
+                <GoldChart 
+                    data={goldHistory} 
+                    intraday={goldIntraday} 
+                    period={goldPeriod} 
+                    setPeriod={setGoldPeriod}
+                    goldPrice={goldPrice}
+                    loading={priceLoading} 
+                    isVisible={showChart}
+                    toggleVisibility={() => setShowChart(!showChart)}
+                />
+
+                {/* 4. Transaction List */}
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[200px]">
+                    <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10">
+                        <div className="font-bold text-gray-700 flex items-center gap-2">
+                            <Calendar size={18} className="text-gray-400"/>
+                            我的黃金存摺
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {books.map((book, idx) => {
-                                const stats = getBookStats(book.id);
-                                const colors = ['bg-blue-50 text-blue-600', 'bg-purple-50 text-purple-600', 'bg-orange-50 text-orange-600', 'bg-teal-50 text-teal-600', 'bg-rose-50 text-rose-600'];
-                                const theme = colors[book.color % colors.length] || colors[0];
-                                
+                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{transactions.length} 筆</span>
+                    </div>
+                    
+                    <div className="divide-y divide-gray-50">
+                        {transactions.length === 0 ? (
+                            <div className="p-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
+                                    <Tag size={24} className="opacity-20"/>
+                                </div>
+                                尚無紀錄，點擊上方按鈕新增第一筆。
+                            </div>
+                        ) : (
+                            transactions.map(t => {
+                                const weightG = Number(t.weight) || 0;
+                                const cost = Number(t.totalCost) || 0;
+                                const itemVal = weightG * goldPrice;
+                                const itemProfit = itemVal - cost;
                                 return (
-                                    <div key={book.id} onClick={() => setSelectedBook(book)} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 relative group hover:shadow-md transition-all cursor-pointer active:scale-95">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${theme}`}>
-                                                <Folder size={20} fill="currentColor" className="opacity-20"/>
-                                                <Folder size={20} className="absolute"/>
-                                            </div>
-                                            <button onClick={(e) => handleDeleteBook(book.id, e)} className="p-2 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100">
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </div>
-                                        <h3 className="font-bold text-lg text-gray-800 mb-1">{book.name}</h3>
-                                        <div className="text-xs text-gray-400 mb-3">{stats.count} 筆交易</div>
-                                        <div className="pt-3 border-t border-gray-50 flex justify-between items-end">
+                                    <div key={t.id} onClick={() => { setEditingItem(t); setShowAddModal(true); }} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer group flex justify-between items-center">
+                                        <div className="flex items-center gap-3">
+                                            {t.photo ? <img src={t.photo} className="w-10 h-10 rounded-xl object-cover border border-gray-100 shadow-sm"/> : 
+                                            <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center border border-yellow-100"><Scale size={18}/></div>}
                                             <div>
-                                                <div className="text-[10px] text-gray-400">現值</div>
-                                                <div className="font-bold text-gray-700">{formatMoney(stats.currentValue)}</div>
+                                                <div className="font-bold text-gray-800 text-base">{formatWeight(weightG)}</div>
+                                                <div className="text-xs text-gray-400 mt-0.5">{t.date} {t.note && `• ${t.note}`}</div>
                                             </div>
-                                            <div className={`text-xs font-bold px-2 py-1 rounded-lg ${stats.profit >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                                {stats.profit >= 0 ? '+' : ''}{Math.round(stats.roi)}%
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`font-bold text-sm ${itemProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                {itemProfit >= 0 ? '+' : ''}{formatMoney(itemProfit)}
                                             </div>
+                                            <div className="text-[10px] text-gray-400 mt-0.5">成本: {formatMoney(t.totalCost)}</div>
                                         </div>
                                     </div>
                                 );
-                            })}
-                            
-                            {/* Empty State for Books */}
-                            {books.length === 0 && (
-                                <button onClick={() => setShowAddBook(true)} className="col-span-full border-2 border-dashed border-gray-200 rounded-3xl p-8 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50 transition-colors gap-2">
-                                    <FolderPlus size={32} className="opacity-50"/>
-                                    <span className="font-bold text-sm">建立第一個資料夾</span>
-                                </button>
-                            )}
-                        </div>
+                            })
+                        )}
                     </div>
-                )}
-
-                {/* VIEW 2: BOOK DETAIL (Transactions) */}
-                {selectedBook && (
-                    <div className="space-y-4 animate-[slideUp_0.2s]">
-                        
-                        {/* Chart Component */}
-                        <GoldChart 
-                            data={goldHistory} intraday={goldIntraday} period={goldPeriod} 
-                            setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading}
-                            isVisible={showChart} toggleVisibility={() => setShowChart(!showChart)}
-                        />
-
-                        {/* Converter */}
-                        <GoldConverter 
-                            goldPrice={goldPrice}
-                            isVisible={showConverter}
-                            toggleVisibility={() => setShowConverter(!showConverter)}
-                        />
-
-                        {/* Transaction List */}
-                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[300px]">
-                            <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10">
-                                <div className="font-bold text-gray-700 flex items-center gap-2">
-                                    <Calendar size={18} className="text-gray-400"/>
-                                    交易明細
-                                </div>
-                                <button onClick={() => { setEditingItem(null); setShowAddGold(true); }} className="bg-gray-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md active:scale-95 transition-transform">
-                                    <Plus size={14}/> 記一筆
-                                </button>
-                            </div>
-                            
-                            <div className="divide-y divide-gray-50">
-                                {currentTransactions.length === 0 ? (
-                                    <div className="p-10 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
-                                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
-                                            <Tag size={24} className="opacity-20"/>
-                                        </div>
-                                        尚無紀錄，點擊右上方按鈕新增。
-                                    </div>
-                                ) : (
-                                    currentTransactions.map(t => {
-                                        const weightG = Number(t.weight) || 0;
-                                        const cost = Number(t.totalCost) || 0;
-                                        const itemVal = weightG * goldPrice;
-                                        const itemProfit = itemVal - cost;
-                                        return (
-                                            <div key={t.id} onClick={() => { setEditingItem(t); setShowAddGold(true); }} className="p-4 hover:bg-gray-50 transition-colors cursor-pointer group flex justify-between items-center">
-                                                <div className="flex items-center gap-3">
-                                                    {t.photo ? <img src={t.photo} className="w-10 h-10 rounded-xl object-cover border border-gray-100"/> : 
-                                                    <div className="w-10 h-10 rounded-xl bg-yellow-50 text-yellow-600 flex items-center justify-center border border-yellow-100"><Scale size={18}/></div>}
-                                                    <div>
-                                                        <div className="font-bold text-gray-800">{formatWeight(weightG)}</div>
-                                                        <div className="text-xs text-gray-400">{t.date} {t.note && `• ${t.note}`}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className={`font-bold text-sm ${itemProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                        {itemProfit >= 0 ? '+' : ''}{formatMoney(itemProfit)}
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-400">成本: {formatMoney(t.totalCost)}</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
+                </div>
             </div>
 
             {/* Modals */}
-            {showAddBook && <AddBookModal onClose={() => setShowAddBook(false)} onSave={handleCreateBook} />}
-            {showAddGold && <AddGoldModal onClose={() => setShowAddGold(false)} onSave={handleSaveGold} onDelete={handleDeleteGold} initialData={editingItem} />}
+            {showAddModal && <AddGoldModal onClose={() => setShowAddModal(false)} onSave={handleSave} onDelete={handleDelete} initialData={editingItem} />}
 
         </div>
     );
