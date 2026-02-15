@@ -18,7 +18,8 @@ import {
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
-  apiKey: "AIzaSyBip2EuLTtwf_L5d_J3mS4XxW5RFfUDEJs",
+  // 使用環境變數讀取 API Key (解決 GitHub 安全警告)
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "gold-29c1b.firebaseapp.com",
   projectId: "gold-29c1b",
   storageBucket: "gold-29c1b.firebasestorage.app",
@@ -112,6 +113,8 @@ const LoginView = () => {
                 setError('網域未授權：請至 Firebase Console > Authentication > Settings > Authorized domains 新增此網址。');
             } else if (err.code === 'auth/popup-closed-by-user') {
                 setError('登入視窗已關閉');
+            } else if (err.code === 'auth/invalid-api-key') {
+                setError('API Key 無效：請檢查 .env 檔案設定是否正確。');
             } else {
                 setError(`登入失敗 (${err.code}): ${err.message}`);
             }
@@ -168,14 +171,38 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     const maxPrice = Math.max(...prices) * 1.001;
     const range = maxPrice - minPrice || 100;
     
-    const getPoints = () => {
-        if (!chartData.length) return '';
-        return chartData.map((d, i) => {
-            const x = (i / (chartData.length - 1)) * 100;
-            const y = 100 - ((d.price - minPrice) / range) * 100;
-            return `${x},${y}`;
-        }).join(' ');
-    };
+    // Helper functions for Bezier Curve generation
+    const line = (pointA, pointB) => {
+        const lengthX = pointB[0] - pointA[0];
+        const lengthY = pointB[1] - pointA[1];
+        return { length: Math.sqrt(Math.pow(lengthX, 2) + Math.pow(lengthY, 2)), angle: Math.atan2(lengthY, lengthX) };
+    }
+    const controlPoint = (current, previous, next, reverse) => {
+        const p = previous || current;
+        const n = next || current;
+        const smoothing = 0.15;
+        const o = line(p, n);
+        const angle = o.angle + (reverse ? Math.PI : 0);
+        const length = o.length * smoothing;
+        const x = current[0] + Math.cos(angle) * length;
+        const y = current[1] + Math.sin(angle) * length;
+        return [x, y];
+    }
+    const bezierCommand = (point, i, a) => {
+        const [cpsX, cpsY] = controlPoint(a[i - 1], a[i - 2], point);
+        const [cpeX, cpeY] = controlPoint(point, a[i - 1], a[i + 1], true);
+        return `C ${cpsX.toFixed(2)},${cpsY.toFixed(2)} ${cpeX.toFixed(2)},${cpeY.toFixed(2)} ${point[0]},${point[1]}`;
+    }
+    const svgPath = (points, command) => {
+        const d = points.reduce((acc, point, i, a) => i === 0 ? `M ${point[0]},${point[1]}` : `${acc} ${command(point, i, a)}`, '');
+        return d;
+    }
+
+    const getY = (price) => 100 - ((price - minPrice) / range) * 100;
+    const getX = (index) => (index / (chartData.length - 1)) * 100;
+    const points = chartData.map((d, i) => [getX(i), getY(d.price)]);
+    const pathD = points.length > 1 ? svgPath(points, bezierCommand) : '';
+    const fillPathD = points.length > 1 ? `${pathD} L 100,100 L 0,100 Z` : '';
 
     const handleMouseMove = (e) => {
         if (!containerRef.current || chartData.length === 0) return;
@@ -215,13 +242,17 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
                      chartData.length === 0 ? <div className="h-32 flex items-center justify-center text-gray-300 text-xs">無數據</div> :
                     <div className="h-32 w-full relative" ref={containerRef} onMouseMove={handleMouseMove} onMouseLeave={() => setHoverData(null)} onTouchMove={(e)=>handleMouseMove(e.touches[0])}>
                          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                            <polyline fill="none" stroke="#eab308" strokeWidth="2" points={getPoints()} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-                            {hoverData && <line x1={hoverData.xPos} y1="0" x2={hoverData.xPos} y2="100" stroke="#ccc" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="4"/>}
+                            <defs><linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#eab308" stopOpacity="0.3" /><stop offset="100%" stopColor="#eab308" stopOpacity="0" /></linearGradient></defs>
+                            <path d={fillPathD} fill="url(#goldGradient)" />
+                            <path d={pathD} fill="none" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                            {hoverData && (<g><line x1={hoverData.xPos} y1="0" x2={hoverData.xPos} y2="100" stroke="#d1d5db" strokeWidth="0.5" strokeDasharray="2" vectorEffect="non-scaling-stroke"/><circle cx={hoverData.xPos} cy={getY(hoverData.item.price)} r="2.5" fill="#eab308" stroke="white" strokeWidth="1.5"/></g>)}
                         </svg>
+                        <div className="absolute right-0 top-0 text-[8px] text-gray-300 font-bold -translate-y-1/2 bg-white px-1">{formatMoney(maxPrice)}</div>
+                        <div className="absolute right-0 bottom-0 text-[8px] text-gray-300 font-bold translate-y-1/2 bg-white px-1">{formatMoney(minPrice)}</div>
                         {hoverData && (
-                            <div className="absolute top-0 bg-gray-800 text-white text-[10px] p-1.5 rounded-lg shadow-lg transform -translate-x-1/2 -translate-y-full pointer-events-none z-10 font-bold" style={{left: `${hoverData.xPos}%`}}>
-                                {formatMoney(hoverData.item.price)}
-                                <div className="text-[8px] font-normal text-gray-400">{hoverData.item.label || hoverData.item.date}</div>
+                            <div style={{ position: 'absolute', left: `${hoverData.xPos}%`, top: 0, transform: `translateX(${hoverData.xPos > 50 ? '-105%' : '5%'})`, pointerEvents: 'none' }} className="bg-gray-800/90 text-white p-2 rounded-lg shadow-xl text-xs z-10 backdrop-blur-sm border border-white/10">
+                                <div className="font-bold text-yellow-400 mb-0.5">{formatMoney(hoverData.item.price)}</div>
+                                <div className="text-gray-300 text-[10px]">{hoverData.item.label || hoverData.item.date}</div>
                             </div>
                         )}
                     </div>}
@@ -236,7 +267,7 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     );
 };
 
-// 2. Add Gold Modal (Updated with Location)
+// 2. Add Gold Modal (With Location)
 const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [unit, setUnit] = useState('g'); 
@@ -438,7 +469,7 @@ export default function App() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [showConverter, setShowConverter] = useState(false);
-    const [showChart, setShowChart] = useState(false);
+    const [showChart, setShowChart] = useState(false); // Initial State: Collapsed
 
     // 0. Inject Tailwind CSS CDN
     useEffect(() => {
