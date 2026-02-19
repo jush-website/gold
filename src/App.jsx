@@ -21,8 +21,8 @@ import {
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
-  // 使用環境變數讀取 API Key (解決 GitHub 安全警告)
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "", 
+  // 使用環境變數讀取 API Key
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
   authDomain: "gold-29c1b.firebaseapp.com",
   projectId: "gold-29c1b",
   storageBucket: "gold-29c1b.firebasestorage.app",
@@ -155,8 +155,6 @@ const LoginView = () => {
 };
 
 // --- GOLD TRACKER COMPONENTS ---
-// ... (Preserving User's Original Gold Logic within components) ...
-
 const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod }) => {
     const containerRef = useRef(null);
     const [hoverData, setHoverData] = useState(null);
