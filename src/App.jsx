@@ -653,10 +653,15 @@ export default function App() {
         const unsubBooks = onSnapshot(query(booksRef, orderBy('createdAt', 'desc')), (snap) => {
             const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
             setBooks(b);
-            if (b.length > 0 && !currentBookId) setCurrentBookId(b[0].id);
+            if (b.length > 0) {
+                // Ensure a book is selected if none currently selected
+                if (!currentBookId || !b.find(book => book.id === currentBookId)) {
+                    setCurrentBookId(b[0].id);
+                }
+            }
             if (b.length === 0) {
                  // Auto-create default book if none exists
-                 addDoc(booksRef, { name: '日常帳本', createdAt: serverTimestamp(), color: 'blue' });
+                 addDoc(booksRef, { name: '日常帳本', createdAt: serverTimestamp(), color: 'blue' }).catch(e => console.error("Auto-create book failed", e));
             }
         });
 
@@ -721,10 +726,16 @@ export default function App() {
     };
 
     const handleGoldSave = async (data) => {
-        const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
-        if (editingGold) await updateDoc(doc(ref, editingGold.id), { ...data, updatedAt: serverTimestamp() });
-        else await addDoc(ref, { ...data, createdAt: serverTimestamp() });
-        setShowGoldAdd(false); setEditingGold(null);
+        if (!user) return;
+        try {
+            const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
+            if (editingGold) await updateDoc(doc(ref, editingGold.id), { ...data, updatedAt: serverTimestamp() });
+            else await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+            setShowGoldAdd(false); setEditingGold(null);
+        } catch (e) {
+            console.error("Add Gold Error", e);
+            alert("新增黃金紀錄失敗: " + e.message);
+        }
     };
 
     const handleGoldDelete = async (id) => {
@@ -734,7 +745,12 @@ export default function App() {
 
     const handleBookSave = async (data) => {
         if (!user) return;
-        await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
+        } catch (e) {
+            console.error("Add Book Error", e);
+            alert("新增帳本失敗: " + e.message);
+        }
     };
 
     const handleBookDelete = async (id) => {
@@ -744,12 +760,21 @@ export default function App() {
     };
 
     const handleExpenseSave = async (data) => {
-        if (!user || !data.bookId) return;
-        const { bookId, ...payload } = data;
-        const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books', bookId, 'transactions');
-        if (editingExpense) await updateDoc(doc(ref, editingExpense.id), { ...payload, updatedAt: serverTimestamp() });
-        else await addDoc(ref, { ...payload, createdAt: serverTimestamp() });
-        setShowExpenseAdd(false); setEditingExpense(null);
+        if (!user) return;
+        if (!data.bookId) {
+            alert("錯誤：未選擇帳本");
+            return;
+        }
+        try {
+            const { bookId, ...payload } = data;
+            const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books', bookId, 'transactions');
+            if (editingExpense) await updateDoc(doc(ref, editingExpense.id), { ...payload, updatedAt: serverTimestamp() });
+            else await addDoc(ref, { ...payload, createdAt: serverTimestamp() });
+            setShowExpenseAdd(false); setEditingExpense(null);
+        } catch (e) {
+            console.error("Add Expense Error", e);
+            alert("新增紀錄失敗: " + e.message);
+        }
     };
 
     const handleExpenseDelete = async (id) => {
