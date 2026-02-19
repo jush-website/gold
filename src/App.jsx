@@ -123,7 +123,8 @@ if (isConfigured) {
     }
 }
 
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v2';
+// 修正：將 ID 改回 v1 以讀取舊有資料
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v1';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
 // --- COMPONENTS ---
