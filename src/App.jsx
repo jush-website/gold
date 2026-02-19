@@ -19,7 +19,8 @@ import {
   Smartphone, Plane, Gift, Divide, Equal, Minus, Settings, Key,
   History, Edit2, Bus, Car, Train, Music, Film, Dumbbell, 
   Heart, Zap, Scissors, Briefcase, LayoutGrid, Check,
-  ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share
+  ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share, 
+  ListFilter
 } from 'lucide-react';
 
 // --- Icon Mapping for Categories ---
@@ -99,12 +100,6 @@ const formatDate = (dateString) => {
     return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
 };
 
-const formatMonth = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
-};
-
 // --- Firebase Init ---
 let app, auth, db, googleProvider;
 const isConfigured = !!firebaseConfig.apiKey; 
@@ -148,7 +143,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
 const AppLoading = () => (
   <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', color: 'white' }}>
     <div className="relative"><div className="w-16 h-16 border-4 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin"></div><div className="absolute inset-0 flex items-center justify-center"><Coins size={24} className="text-yellow-500" /></div></div>
-    <h2 className="mt-4 text-xl font-bold tracking-wider text-yellow-500" style={{fontFamily: 'sans-serif'}}>ASSET MASTER</h2>
+    <h2 className="mt-4 text-xl font-bold tracking-wider text-yellow-500" style={{fontFamily: 'sans-serif'}}>我的記帳本</h2>
     <p className="text-gray-400 text-sm mt-2">載入您的資產數據...</p>
   </div>
 );
@@ -191,7 +186,7 @@ const LoginView = () => {
              <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
              <div className="relative z-10 w-full max-w-md bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 p-8 rounded-3xl shadow-2xl text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20 transform rotate-3"><Wallet size={40} className="text-white" /></div>
-                <h1 className="text-3xl font-black text-white mb-2">資產管家</h1><p className="text-gray-400 mb-8">黃金投資 • 生活記帳 • 財務自由</p>
+                <h1 className="text-3xl font-black text-white mb-2">我的記帳本</h1><p className="text-gray-400 mb-8">黃金投資 • 生活記帳 • 財務自由</p>
                 {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5"/><span>{error}</span></div>}
                 <button onClick={handleGoogleLogin} disabled={loading} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl mb-3 flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">{loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 使用 Google 登入</button>
                 <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
@@ -730,8 +725,12 @@ export default function App() {
     const [allExpenses, setAllExpenses] = useState([]);
     const [categories, setCategories] = useState([]);
     
-    // History specific state (Swipe functionality)
-    const [historyMonthIndex, setHistoryMonthIndex] = useState(0);
+    // History specific state (無限滑動日曆與分頁)
+    const [currentHistoryDate, setCurrentHistoryDate] = useState(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    const [historyTab, setHistoryTab] = useState('stats'); // 'stats' | 'list'
     const [touchStartX, setTouchStartX] = useState(null);
     const [touchStartY, setTouchStartY] = useState(null);
 
@@ -742,12 +741,11 @@ export default function App() {
 
     // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
     useEffect(() => {
-        // 1. 設定 Meta Tags
         const metaTags = [
             { name: 'theme-color', content: '#f9fafb' }, 
             { name: 'apple-mobile-web-app-capable', content: 'yes' }, 
             { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, 
-            { name: 'apple-mobile-web-app-title', content: '資產管家' }, 
+            { name: 'apple-mobile-web-app-title', content: '我的記帳本' }, 
             { name: 'mobile-web-app-capable', content: 'yes' } 
         ];
 
@@ -761,13 +759,12 @@ export default function App() {
             meta.content = content;
         });
 
-        // 2. 動態產生 manifest.json
         const manifest = {
-            name: "資產管家", short_name: "資產管家", description: "您的專屬黃金與記帳管理工具",
+            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
             start_url: window.location.pathname, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
             icons: [{
-                src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJiNjNiNCIgcng9IjIyIi8+PHRleHQgeD0iNTAiIHk9IjUxIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNDUiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPiQ8L3RleHQ+PC9zdmc+",
-                sizes: "192x192 512x512", type: "image/svg+xml", purpose: "any maskable"
+                src: "/gold.png",
+                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
             }]
         };
         const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
@@ -778,9 +775,8 @@ export default function App() {
         link.href = manifestUrl;
 
         let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (!appleIcon) { appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = manifest.icons[0].src; document.head.appendChild(appleIcon); }
+        if (!appleIcon) { appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = "/gold.png"; document.head.appendChild(appleIcon); }
 
-        // 3. 偵測設備與安裝狀態
         const userAgent = window.navigator.userAgent.toLowerCase();
         const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
         const isAndroidDevice = /android/.test(userAgent);
@@ -792,7 +788,6 @@ export default function App() {
             setShowInstallBtn(true);
         }
 
-        // Android 攔截安裝事件
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
@@ -818,20 +813,9 @@ export default function App() {
                 setShowInstallBtn(false);
             }
         } else {
-            // Android 降級提示 (如未觸發 prompt)
             alert('請點擊瀏覽器右上角的「選單」按鈕，選擇「加到主畫面」來安裝 App。');
         }
     };
-
-    useEffect(() => {
-        if (!document.getElementById('tailwind-script')) {
-            const script = document.createElement('script');
-            script.id = 'tailwind-script';
-            script.src = "https://cdn.tailwindcss.com";
-            script.async = true;
-            document.head.appendChild(script);
-        }
-    }, []);
 
     useEffect(() => {
         if (!isConfigured) return; 
@@ -843,7 +827,6 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // Load Gold, Books, Categories
     useEffect(() => {
         if (!user || !isConfigured) return;
 
@@ -879,7 +862,6 @@ export default function App() {
         return () => { unsubGold(); unsubBooks(); unsubCat(); };
     }, [user]);
 
-    // Load All Expenses securely
     useEffect(() => {
         if (!user || !isConfigured) return;
         const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), orderBy('date', 'desc'));
@@ -921,7 +903,6 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
-    // Actions
     const handleGoldSave = async (data) => {
         try {
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
@@ -969,7 +950,7 @@ export default function App() {
     };
     const handleCategoryDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); };
 
-    // Calculations
+    // --- Calculations ---
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
@@ -1035,21 +1016,19 @@ export default function App() {
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
-    const historyGroups = useMemo(() => {
-        const groups = {};
-        allExpenses.forEach(e => {
+    // --- 歷史紀錄專屬邏輯 (按月篩選) ---
+    const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    // 取出當前月份的所有紀錄
+    const currentHistoryRecords = useMemo(() => {
+        return allExpenses.filter(e => {
             const safeDate = e.date || new Date().toISOString().split('T')[0];
-            const monthKey = safeDate.substring(0, 7); 
-            if(!groups[monthKey]) groups[monthKey] = { date: monthKey, list: [], totalIncome: 0, totalExpense: 0 };
-            groups[monthKey].list.push(e);
-            if(e.type === 'expense') groups[monthKey].totalExpense += (Number(e.amount) || 0);
-            else groups[monthKey].totalIncome += (Number(e.amount) || 0);
-        });
-        Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
-        return Object.values(groups).sort((a,b) => new Date(b.date + '-01') - new Date(a.date + '-01'));
-    }, [allExpenses]);
+            return safeDate.startsWith(historyCurrentMonthKey);
+        }).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }, [allExpenses, historyCurrentMonthKey]);
 
-    const safeHistoryIndex = Math.min(historyMonthIndex, Math.max(0, historyGroups.length - 1));
+    const historyTotalIncome = currentHistoryRecords.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
+    const historyTotalExpense = currentHistoryRecords.filter(e => e.type === 'expense').reduce((a,b) => a + (Number(b.amount) || 0), 0);
 
     const handleTouchStart = (e) => {
         setTouchStartX(e.touches[0].clientX);
@@ -1064,11 +1043,14 @@ export default function App() {
         const diffX = touchStartX - touchEndX;
         const diffY = Math.abs(touchStartY - touchEndY);
 
+        // 判斷是否為明確的水平滑動
         if (Math.abs(diffX) > 50 && diffY < 50) {
-            if (diffX > 0 && safeHistoryIndex > 0) {
-                setHistoryMonthIndex(prev => prev - 1);
-            } else if (diffX < 0 && safeHistoryIndex < historyGroups.length - 1) {
-                setHistoryMonthIndex(prev => prev + 1);
+            if (diffX > 0) {
+                // 手指往左滑 (看舊一點的/下一個月份)
+                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+            } else if (diffX < 0) {
+                // 手指往右滑 (看新一點的/上一個月份)
+                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
             }
         }
         setTouchStartX(null);
@@ -1273,90 +1255,124 @@ export default function App() {
                 </div>
              )}
 
-             {/* === HISTORY VIEW === */}
+             {/* === HISTORY VIEW (Swipeable & Tabs) === */}
              {currentView === 'history' && (
                  <div 
                      className="p-4 space-y-5 animate-[fadeIn_0.3s]"
                      onTouchStart={handleTouchStart}
                      onTouchEnd={handleTouchEnd}
                  >
-                     {historyGroups.length === 0 ? (
-                         <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center"><History size={40} className="mb-4 opacity-20"/>目前沒有任何歷史紀錄</div>
+                     {/* Month Navigator */}
+                     <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
+                         <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
+                         <div className="text-center select-none">
+                             <h3 className="text-xl font-black text-gray-800 tracking-wide">{currentHistoryDate.getFullYear()}年 {currentHistoryDate.getMonth() + 1}月</h3>
+                             <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
+                         </div>
+                         <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
+                     </div>
+
+                     {/* Tabs Toggle */}
+                     <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+                         <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
+                         <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
+                     </div>
+
+                     {/* Content Area */}
+                     {currentHistoryRecords.length === 0 ? (
+                         <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
+                             <History size={40} className="mb-4 opacity-20"/>
+                             當月無紀錄
+                         </div>
                      ) : (
                          <>
-                             <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-sm border border-gray-100">
-                                 <button onClick={() => setHistoryMonthIndex(prev => Math.min(historyGroups.length - 1, prev + 1))} disabled={safeHistoryIndex === historyGroups.length - 1} className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === historyGroups.length - 1 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}><ChevronLeft size={24}/></button>
-                                 <div className="text-center select-none">
-                                     <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(historyGroups[safeHistoryIndex].date)}</h3>
-                                     <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
-                                 </div>
-                                 <button onClick={() => setHistoryMonthIndex(prev => Math.max(0, prev - 1))} disabled={safeHistoryIndex === 0} className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === 0 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}><ChevronRight size={24}/></button>
-                             </div>
-
-                             <div className="grid grid-cols-2 gap-3">
-                                 <div className="bg-emerald-50 rounded-[1.5rem] p-4 border border-emerald-100 shadow-sm"><div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div><div className="text-xl font-black text-emerald-700">{formatMoney(historyGroups[safeHistoryIndex].totalIncome)}</div></div>
-                                 <div className="bg-rose-50 rounded-[1.5rem] p-4 border border-rose-100 shadow-sm"><div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div><div className="text-xl font-black text-rose-700">{formatMoney(historyGroups[safeHistoryIndex].totalExpense)}</div></div>
-                             </div>
-
-                             <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2"><PieChart size={16} className="text-purple-400"/> 分類支出排名</h4>
-                                 <div className="space-y-3">
-                                     {(() => {
-                                         const currentGroup = historyGroups[safeHistoryIndex];
-                                         const catTotals = {};
-                                         currentGroup.list.forEach(item => {
-                                             if (item.type === 'expense') {
-                                                 const catId = item.category || 'other';
-                                                 catTotals[catId] = (catTotals[catId] || 0) + item.amount;
-                                             }
-                                         });
-                                         const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
-                                         if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl">本月無支出紀錄</div>;
-                                         return sortedCats.map(([catId, amount]) => {
-                                             const cat = categories.find(c => c.id === catId);
-                                             const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                             const percent = currentGroup.totalExpense > 0 ? ((amount / currentGroup.totalExpense) * 100).toFixed(1) : 0;
-                                             return (
-                                                 <div key={catId} className="flex justify-between items-center">
-                                                     <div className="flex items-center gap-3">
-                                                         <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-sm"><IconComp size={16}/></div>
-                                                         <div><div className="text-sm font-bold text-gray-700">{cat?.name || '其他'}</div><div className="text-[10px] text-gray-400 font-bold">{percent}%</div></div>
-                                                     </div>
-                                                     <span className="font-black text-gray-800">{formatMoney(amount)}</span>
-                                                 </div>
-                                             )
-                                         });
-                                     })()}
-                                 </div>
-                             </div>
-
-                             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                                 {historyGroups[safeHistoryIndex].list.map((item, i) => {
-                                      const cat = categories.find(c=>c.id===item.category);
-                                      const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                      return (
-                                         <div key={item.id} className={`p-4 flex justify-between items-center hover:bg-gray-50 transition-colors ${i !== historyGroups[safeHistoryIndex].list.length-1 ? 'border-b border-gray-50' : ''}`}>
-                                             <div className="flex items-center gap-4">
-                                                 <div className="text-xs font-bold text-gray-400 w-11 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
-                                                     <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
-                                                     <div className="text-[8px] uppercase">Day</div>
-                                                 </div>
-                                                 <div className="flex items-center gap-2">
-                                                    <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}><IconComp size={16}/></div>
-                                                    <div>
-                                                        <div className="font-bold text-gray-800 text-sm">{cat?.name || '其他'}</div>
-                                                        <div className="text-[10px] text-gray-400 max-w-[120px] truncate">{item.note || '無備註'}</div>
-                                                    </div>
-                                                 </div>
-                                             </div>
-                                             <div className="text-right">
-                                                <div className={`font-black text-lg ${item.type === 'income' ? 'text-green-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                <div className="text-[9px] font-bold text-gray-500 bg-gray-100 inline-block px-2 py-0.5 rounded-md mt-1 border border-gray-200">{books.find(b=>b.id===item.bookId)?.name}</div>
-                                             </div>
+                             {/* Tab 1: Stats */}
+                             {historyTab === 'stats' && (
+                                 <div className="space-y-4 animate-[fadeIn_0.3s]">
+                                     <div className="grid grid-cols-2 gap-3">
+                                         <div className="bg-emerald-50 rounded-[1.5rem] p-5 border border-emerald-100 shadow-sm">
+                                             <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
+                                             <div className="text-2xl font-black text-emerald-700">{formatMoney(historyTotalIncome)}</div>
                                          </div>
-                                     )
-                                 })}
-                             </div>
+                                         <div className="bg-rose-50 rounded-[1.5rem] p-5 border border-rose-100 shadow-sm">
+                                             <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
+                                             <div className="text-2xl font-black text-rose-700">{formatMoney(historyTotalExpense)}</div>
+                                         </div>
+                                     </div>
+
+                                     <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                             <PieChart size={16} className="text-purple-400"/> 分類支出排名
+                                         </h4>
+                                         <div className="space-y-4">
+                                             {(() => {
+                                                 const catTotals = {};
+                                                 currentHistoryRecords.forEach(item => {
+                                                     if (item.type === 'expense') {
+                                                         const catId = item.category || 'other';
+                                                         catTotals[catId] = (catTotals[catId] || 0) + (Number(item.amount) || 0);
+                                                     }
+                                                 });
+                                                 const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
+                                                 
+                                                 if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl font-bold">本月無支出</div>;
+                                                 
+                                                 return sortedCats.map(([catId, amount]) => {
+                                                     const cat = categories.find(c => c.id === catId);
+                                                     const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                                     const percent = historyTotalExpense > 0 ? ((amount / historyTotalExpense) * 100).toFixed(1) : 0;
+                                                     
+                                                     return (
+                                                         <div key={catId} className="flex justify-between items-center group">
+                                                             <div className="flex items-center gap-3">
+                                                                 <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-inner group-hover:bg-purple-50 group-hover:text-purple-500 group-hover:border-purple-100 transition-colors">
+                                                                     <IconComp size={20}/>
+                                                                 </div>
+                                                                 <div>
+                                                                     <div className="text-sm font-black text-gray-700">{cat?.name || '其他'}</div>
+                                                                     <div className="text-[11px] text-gray-400 font-bold mt-0.5">{percent}%</div>
+                                                                 </div>
+                                                             </div>
+                                                             <span className="font-black text-lg text-gray-800">{formatMoney(amount)}</span>
+                                                         </div>
+                                                     )
+                                                 });
+                                             })()}
+                                         </div>
+                                     </div>
+                                 </div>
+                             )}
+
+                             {/* Tab 2: Transaction List */}
+                             {historyTab === 'list' && (
+                                 <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] overflow-hidden animate-[fadeIn_0.3s]">
+                                     {currentHistoryRecords.map((item, i) => {
+                                          const cat = categories.find(c=>c.id===item.category);
+                                          const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                          return (
+                                             <div key={item.id} className={`p-4 flex justify-between items-center hover:bg-gray-50 transition-colors ${i !== currentHistoryRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                                 <div className="flex items-center gap-4">
+                                                     <div className="text-xs font-bold text-gray-400 w-11 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
+                                                         <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
+                                                         <div className="text-[8px] uppercase">Day</div>
+                                                     </div>
+                                                     <div className="flex items-center gap-3">
+                                                        <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
+                                                        <div>
+                                                            <div className="font-black text-gray-800 text-sm">{cat?.name || '其他'}</div>
+                                                            <div className="text-[10px] text-gray-400 max-w-[120px] truncate mt-0.5">{item.note || '無備註'}</div>
+                                                        </div>
+                                                     </div>
+                                                 </div>
+                                                 <div className="text-right">
+                                                    <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
+                                                    <div className="text-[9px] font-bold text-gray-500 bg-gray-100 inline-block px-2 py-0.5 rounded-md mt-1 border border-gray-200">{books.find(b=>b.id===item.bookId)?.name}</div>
+                                                 </div>
+                                             </div>
+                                         )
+                                     })}
+                                 </div>
+                             )}
                          </>
                      )}
                  </div>
