@@ -18,7 +18,8 @@ import {
   ShoppingBag, ShoppingCart, Truck, Home, Utensils,
   Smartphone, Plane, Gift, Divide, Equal, Minus, Settings, Key,
   History, Edit2, Bus, Car, Train, Music, Film, Dumbbell, 
-  Heart, Zap, Scissors, Briefcase, LayoutGrid, Check
+  Heart, Zap, Scissors, Briefcase, LayoutGrid, Check,
+  ChevronLeft, ChevronRight, PieChart, Undo2
 } from 'lucide-react';
 
 // --- Icon Mapping for Categories ---
@@ -674,10 +675,7 @@ export default function App() {
     const navigateTo = (view) => {
         setHistoryStack(prev => {
             const existingIndex = prev.indexOf(view);
-            if (existingIndex !== -1) {
-                // 如果畫面已在堆疊中，直接回到該畫面（避免無限循環堆疊）
-                return prev.slice(0, existingIndex + 1);
-            }
+            if (existingIndex !== -1) return prev.slice(0, existingIndex + 1);
             return [...prev, view];
         });
     };
@@ -704,6 +702,11 @@ export default function App() {
     const [allExpenses, setAllExpenses] = useState([]);
     const [categories, setCategories] = useState([]);
     
+    // History specific state (Swipe functionality)
+    const [historyMonthIndex, setHistoryMonthIndex] = useState(0);
+    const [touchStartX, setTouchStartX] = useState(null);
+    const [touchStartY, setTouchStartY] = useState(null);
+
     // UI State
     const [showExpenseAdd, setShowExpenseAdd] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
@@ -932,8 +935,40 @@ export default function App() {
             else groups[monthKey].totalIncome += (Number(e.amount) || 0);
         });
         Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        // Sort groups by month descending (newest month first, index 0)
         return Object.values(groups).sort((a,b) => new Date(b.date + '-01') - new Date(a.date + '-01'));
     }, [allExpenses]);
+
+    // Ensure valid index for history view
+    const safeHistoryIndex = Math.min(historyMonthIndex, Math.max(0, historyGroups.length - 1));
+
+    // Handle History View Swiping
+    const handleTouchStart = (e) => {
+        setTouchStartX(e.touches[0].clientX);
+        setTouchStartY(e.touches[0].clientY);
+    };
+
+    const handleTouchEnd = (e) => {
+        if (touchStartX === null || touchStartY === null) return;
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        
+        const diffX = touchStartX - touchEndX;
+        const diffY = Math.abs(touchStartY - touchEndY);
+
+        // Ensure it's a horizontal swipe, not a vertical scroll
+        if (Math.abs(diffX) > 50 && diffY < 50) {
+            if (diffX > 0 && safeHistoryIndex > 0) {
+                // Swiped left (finger moving left) -> Go to Newer month (smaller index)
+                setHistoryMonthIndex(prev => prev - 1);
+            } else if (diffX < 0 && safeHistoryIndex < historyGroups.length - 1) {
+                // Swiped right (finger moving right) -> Go to Older month (larger index)
+                setHistoryMonthIndex(prev => prev + 1);
+            }
+        }
+        setTouchStartX(null);
+        setTouchStartY(null);
+    };
 
     if (!isConfigured) return <ConfigScreen />;
     if (loading) return <AppLoading />;
@@ -943,24 +978,31 @@ export default function App() {
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': currentBook?.name || '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理' };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
-             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
+             {/* 防止左右滑動關閉的關鍵 CSS：
+                 overscroll-behavior-x: none 會阻止 Android Chrome 左右滑動回上一頁
+                 touch-action: pan-y (上面的 class) 會阻止 iOS Safari 水平滑動的預設行為
+             */}
+             <style>{`
+                 html, body { 
+                     overscroll-behavior-x: none; 
+                 }
+                 .hide-scrollbar::-webkit-scrollbar { display: none; } 
+                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } 
+                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+             `}</style>
+             
              <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
              {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
-                {/* 動態左上角按鈕：歷史大於1時顯示返回鍵，否則顯示漢堡選單 */}
-                {historyStack.length > 1 ? (
-                    <button onClick={goBack} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
-                        <ArrowLeft size={24} className="text-gray-700"/>
-                    </button>
-                ) : (
+                <div className="w-10">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
                         <Menu size={24} className="text-gray-700"/>
                     </button>
-                )}
-
-                <div className="font-black text-lg text-gray-800 flex items-center gap-2">
+                </div>
+                
+                <div className="font-black text-lg text-gray-800 flex justify-center items-center gap-2 flex-1">
                     {currentView === 'expense' ? (
                         <div onClick={() => setShowBookManager(true)} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-xl transition-colors border border-transparent hover:border-gray-200">
                             <Wallet size={18} className="text-blue-500"/><span className="max-w-[120px] truncate">{viewTitles[currentView]}</span><ChevronDown size={16} className="text-gray-400"/>
@@ -969,7 +1011,15 @@ export default function App() {
                         <span>{viewTitles[currentView]}</span>
                     )}
                 </div>
-                <div className="w-8"></div>
+
+                <div className="w-10 flex justify-end">
+                    {/* 返回按鈕移至右側 */}
+                    {historyStack.length > 1 && (
+                        <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
+                            <Undo2 size={24}/>
+                        </button>
+                    )}
+                </div>
              </div>
 
              {/* === HOME DASHBOARD VIEW === */}
@@ -1117,32 +1167,112 @@ export default function App() {
                 </div>
              )}
 
-             {/* === HISTORY VIEW === */}
+             {/* === HISTORY VIEW (Swipeable & Category Summary) === */}
              {currentView === 'history' && (
-                 <div className="p-4 space-y-6 animate-[fadeIn_0.3s]">
+                 <div 
+                     className="p-4 space-y-5 animate-[fadeIn_0.3s]"
+                     onTouchStart={handleTouchStart}
+                     onTouchEnd={handleTouchEnd}
+                 >
                      {historyGroups.length === 0 ? (
                          <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center"><History size={40} className="mb-4 opacity-20"/>目前沒有任何歷史紀錄</div>
-                     ) : historyGroups.map((group) => (
-                         <div key={group.date}>
-                             <div className="flex justify-between items-center mb-3 px-2">
-                                 <h3 className="text-lg font-black text-gray-700">{formatMonth(group.date)}</h3>
-                                 <div className="text-[10px] font-bold bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl shadow-sm">
-                                     收: <span className="text-green-600">{formatMoney(group.totalIncome)}</span> | 支: <span className="text-red-500">{formatMoney(group.totalExpense)}</span>
+                     ) : (
+                         <>
+                             {/* Swipeable Header */}
+                             <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-sm border border-gray-100">
+                                 {/* Left Arrow: Go to Older month (Index + 1) */}
+                                 <button 
+                                    onClick={() => setHistoryMonthIndex(prev => Math.min(historyGroups.length - 1, prev + 1))} 
+                                    disabled={safeHistoryIndex === historyGroups.length - 1} 
+                                    className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === historyGroups.length - 1 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}
+                                 >
+                                     <ChevronLeft size={24}/>
+                                 </button>
+                                 <div className="text-center select-none">
+                                     <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(historyGroups[safeHistoryIndex].date)}</h3>
+                                     <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">
+                                         左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/>
+                                     </div>
+                                 </div>
+                                 {/* Right Arrow: Go to Newer month (Index - 1) */}
+                                 <button 
+                                    onClick={() => setHistoryMonthIndex(prev => Math.max(0, prev - 1))} 
+                                    disabled={safeHistoryIndex === 0} 
+                                    className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === 0 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}
+                                 >
+                                     <ChevronRight size={24}/>
+                                 </button>
+                             </div>
+
+                             {/* Income / Expense Summary Card */}
+                             <div className="grid grid-cols-2 gap-3">
+                                 <div className="bg-emerald-50 rounded-[1.5rem] p-4 border border-emerald-100 shadow-sm">
+                                     <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
+                                     <div className="text-xl font-black text-emerald-700">{formatMoney(historyGroups[safeHistoryIndex].totalIncome)}</div>
+                                 </div>
+                                 <div className="bg-rose-50 rounded-[1.5rem] p-4 border border-rose-100 shadow-sm">
+                                     <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
+                                     <div className="text-xl font-black text-rose-700">{formatMoney(historyGroups[safeHistoryIndex].totalExpense)}</div>
                                  </div>
                              </div>
-                             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
-                                 {group.list.map((item, i) => {
+
+                             {/* Category Spending Summary */}
+                             <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                     <PieChart size={16} className="text-purple-400"/> 分類支出排名
+                                 </h4>
+                                 <div className="space-y-3">
+                                     {(() => {
+                                         const currentGroup = historyGroups[safeHistoryIndex];
+                                         const catTotals = {};
+                                         currentGroup.list.forEach(item => {
+                                             if (item.type === 'expense') {
+                                                 const catId = item.category || 'other';
+                                                 catTotals[catId] = (catTotals[catId] || 0) + item.amount;
+                                             }
+                                         });
+                                         const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
+                                         
+                                         if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl">本月無支出紀錄</div>;
+                                         
+                                         return sortedCats.map(([catId, amount]) => {
+                                             const cat = categories.find(c => c.id === catId);
+                                             const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                             const percent = currentGroup.totalExpense > 0 ? ((amount / currentGroup.totalExpense) * 100).toFixed(1) : 0;
+                                             
+                                             return (
+                                                 <div key={catId} className="flex justify-between items-center">
+                                                     <div className="flex items-center gap-3">
+                                                         <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-sm">
+                                                             <IconComp size={16}/>
+                                                         </div>
+                                                         <div>
+                                                             <div className="text-sm font-bold text-gray-700">{cat?.name || '其他'}</div>
+                                                             <div className="text-[10px] text-gray-400 font-bold">{percent}%</div>
+                                                         </div>
+                                                     </div>
+                                                     <span className="font-black text-gray-800">{formatMoney(amount)}</span>
+                                                 </div>
+                                             )
+                                         });
+                                     })()}
+                                 </div>
+                             </div>
+
+                             {/* Transaction List */}
+                             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                                 {historyGroups[safeHistoryIndex].list.map((item, i) => {
                                       const cat = categories.find(c=>c.id===item.category);
                                       const IconComp = ICON_MAP[cat?.icon] || Tag;
                                       return (
-                                         <div key={item.id} className={`p-4 flex justify-between items-center hover:bg-gray-50 transition-colors ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                         <div key={item.id} className={`p-4 flex justify-between items-center hover:bg-gray-50 transition-colors ${i !== historyGroups[safeHistoryIndex].list.length-1 ? 'border-b border-gray-50' : ''}`}>
                                              <div className="flex items-center gap-4">
-                                                 <div className="text-xs font-bold text-gray-400 w-10 text-center flex flex-col items-center justify-center bg-gray-50 rounded-xl py-1.5 border border-gray-100">
-                                                     <div className="text-lg text-gray-800 leading-none mb-0.5">{new Date(item.date).getDate()}</div>
+                                                 <div className="text-xs font-bold text-gray-400 w-11 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
+                                                     <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
                                                      <div className="text-[8px] uppercase">Day</div>
                                                  </div>
                                                  <div className="flex items-center gap-2">
-                                                    <div className={`p-1.5 rounded-lg ${item.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}><IconComp size={14}/></div>
+                                                    <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}><IconComp size={16}/></div>
                                                     <div>
                                                         <div className="font-bold text-gray-800 text-sm">{cat?.name || '其他'}</div>
                                                         <div className="text-[10px] text-gray-400 max-w-[120px] truncate">{item.note || '無備註'}</div>
@@ -1150,15 +1280,15 @@ export default function App() {
                                                  </div>
                                              </div>
                                              <div className="text-right">
-                                                <div className={`font-black ${item.type === 'income' ? 'text-green-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                <div className="text-[9px] text-gray-400 bg-gray-100 inline-block px-1.5 rounded mt-0.5">{books.find(b=>b.id===item.bookId)?.name}</div>
+                                                <div className={`font-black text-lg ${item.type === 'income' ? 'text-green-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
+                                                <div className="text-[9px] font-bold text-gray-500 bg-gray-100 inline-block px-2 py-0.5 rounded-md mt-1 border border-gray-200">{books.find(b=>b.id===item.bookId)?.name}</div>
                                              </div>
                                          </div>
                                      )
                                  })}
                              </div>
-                         </div>
-                     ))}
+                         </>
+                     )}
                  </div>
              )}
 
