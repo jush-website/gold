@@ -19,7 +19,7 @@ import {
   Smartphone, Plane, Gift, Divide, Equal, Minus, Settings, Key,
   History, Edit2, Bus, Car, Train, Music, Film, Dumbbell, 
   Heart, Zap, Scissors, Briefcase, LayoutGrid, Check,
-  ChevronLeft, ChevronRight, PieChart, Undo2
+  ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share
 } from 'lucide-react';
 
 // --- Icon Mapping for Categories ---
@@ -662,6 +662,28 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
     );
 };
 
+// --- PWA iOS INSTALL PROMPT ---
+const IOSInstallPrompt = ({ onClose }) => {
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
+            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out] mb-4" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-5">
+                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                        <div className="bg-blue-50 p-2 rounded-xl text-blue-500"><Download size={20}/></div> 安裝到手機
+                    </h3>
+                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"><X size={18}/></button>
+                </div>
+                <div className="text-sm text-gray-600 space-y-4 font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="flex items-center gap-2">1. 點擊下方導覽列的 <Share size={18} className="text-blue-500"/></p>
+                    <p className="flex items-center gap-2">2. 往下滑動並選擇 <span className="bg-white border border-gray-200 px-2 py-1 rounded-lg text-xs shadow-sm flex items-center gap-1">加入主畫面 <Plus size={12}/></span></p>
+                    <p className="flex items-center gap-2">3. 點擊右上角的「新增」即可！</p>
+                </div>
+                <button onClick={onClose} className="w-full mt-6 py-3.5 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 active:scale-95 transition-transform">我知道了</button>
+            </div>
+        </div>
+    );
+};
+
 // --- MAIN APPLICATION SHELL ---
 export default function App() {
     const [user, setUser] = useState(null);
@@ -683,6 +705,12 @@ export default function App() {
     const goBack = () => {
         setHistoryStack(prev => prev.length > 1 ? prev.slice(0, -1) : ['home']);
     };
+
+    // PWA & Install state
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const [showInstallBtn, setShowInstallBtn] = useState(false);
+    const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+    const [isIOS, setIsIOS] = useState(false);
 
     // Gold Data
     const [goldTransactions, setGoldTransactions] = useState([]);
@@ -712,15 +740,15 @@ export default function App() {
     const [editingExpense, setEditingExpense] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
-    // --- PWA (Progressive Web App) App 安裝設定 ---
+    // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
     useEffect(() => {
-        // 1. 設定 iOS 與 Android 的 App 外觀 Meta Tags
+        // 1. 設定 Meta Tags
         const metaTags = [
-            { name: 'theme-color', content: '#f9fafb' }, // 匹配系統背景色
-            { name: 'apple-mobile-web-app-capable', content: 'yes' }, // 允許 iOS 全螢幕執行
-            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, // iOS 狀態列樣式
-            { name: 'apple-mobile-web-app-title', content: '資產管家' }, // iOS 桌面顯示名稱
-            { name: 'mobile-web-app-capable', content: 'yes' } // Android 全螢幕執行
+            { name: 'theme-color', content: '#f9fafb' }, 
+            { name: 'apple-mobile-web-app-capable', content: 'yes' }, 
+            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, 
+            { name: 'apple-mobile-web-app-title', content: '資產管家' }, 
+            { name: 'mobile-web-app-capable', content: 'yes' } 
         ];
 
         metaTags.forEach(({ name, content }) => {
@@ -733,48 +761,67 @@ export default function App() {
             meta.content = content;
         });
 
-        // 2. 動態產生 manifest.json (讓瀏覽器識別為可安裝的 App)
+        // 2. 動態產生 manifest.json
         const manifest = {
-            name: "資產管家",
-            short_name: "資產管家",
-            description: "您的專屬黃金與記帳管理工具",
-            start_url: window.location.pathname,
-            display: "standalone", // 關鍵：隱藏瀏覽器網址列，呈現原生 App 視覺
-            background_color: "#f9fafb",
-            theme_color: "#f9fafb",
-            icons: [
-                {
-                    // 內建一個精美的 SVG App 圖示 (深藍色底帶錢幣符號)
-                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJiNjNiNCIgcng9IjIyIi8+PHRleHQgeD0iNTAiIHk9IjUxIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNDUiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPiQ8L3RleHQ+PC9zdmc+",
-                    sizes: "192x192 512x512",
-                    type: "image/svg+xml",
-                    purpose: "any maskable"
-                }
-            ]
+            name: "資產管家", short_name: "資產管家", description: "您的專屬黃金與記帳管理工具",
+            start_url: window.location.pathname, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
+            icons: [{
+                src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJiNjNiNCIgcng9IjIyIi8+PHRleHQgeD0iNTAiIHk9IjUxIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNDUiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPiQ8L3RleHQ+PC9zdmc+",
+                sizes: "192x192 512x512", type: "image/svg+xml", purpose: "any maskable"
+            }]
         };
-
         const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
         const manifestUrl = URL.createObjectURL(manifestBlob);
         
         let link = document.querySelector('link[rel="manifest"]');
-        if (!link) {
-            link = document.createElement('link');
-            link.rel = 'manifest';
-            document.head.appendChild(link);
-        }
+        if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
         link.href = manifestUrl;
 
-        // 3. 設定 iOS 專用的桌面圖示
         let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (!appleIcon) {
-            appleIcon = document.createElement('link');
-            appleIcon.rel = 'apple-touch-icon';
-            appleIcon.href = manifest.icons[0].src;
-            document.head.appendChild(appleIcon);
+        if (!appleIcon) { appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = manifest.icons[0].src; document.head.appendChild(appleIcon); }
+
+        // 3. 偵測設備與安裝狀態
+        const userAgent = window.navigator.userAgent.toLowerCase();
+        const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+        const isAndroidDevice = /android/.test(userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
+        
+        setIsIOS(isIOSDevice);
+
+        if (!isStandalone && (isIOSDevice || isAndroidDevice)) {
+            setShowInstallBtn(true);
         }
 
-        return () => URL.revokeObjectURL(manifestUrl);
+        // Android 攔截安裝事件
+        const handleBeforeInstallPrompt = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+            if (!isStandalone) setShowInstallBtn(true);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        return () => {
+            URL.revokeObjectURL(manifestUrl);
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
     }, []);
+
+    const handleInstallClick = async () => {
+        if (isIOS) {
+            setShowIOSPrompt(true);
+        } else if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                setDeferredPrompt(null);
+                setShowInstallBtn(false);
+            }
+        } else {
+            // Android 降級提示 (如未觸發 prompt)
+            alert('請點擊瀏覽器右上角的「選單」按鈕，選擇「加到主畫面」來安裝 App。');
+        }
+    };
 
     useEffect(() => {
         if (!document.getElementById('tailwind-script')) {
@@ -999,14 +1046,11 @@ export default function App() {
             else groups[monthKey].totalIncome += (Number(e.amount) || 0);
         });
         Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
-        // Sort groups by month descending (newest month first, index 0)
         return Object.values(groups).sort((a,b) => new Date(b.date + '-01') - new Date(a.date + '-01'));
     }, [allExpenses]);
 
-    // Ensure valid index for history view
     const safeHistoryIndex = Math.min(historyMonthIndex, Math.max(0, historyGroups.length - 1));
 
-    // Handle History View Swiping
     const handleTouchStart = (e) => {
         setTouchStartX(e.touches[0].clientX);
         setTouchStartY(e.touches[0].clientY);
@@ -1020,13 +1064,10 @@ export default function App() {
         const diffX = touchStartX - touchEndX;
         const diffY = Math.abs(touchStartY - touchEndY);
 
-        // Ensure it's a horizontal swipe, not a vertical scroll
         if (Math.abs(diffX) > 50 && diffY < 50) {
             if (diffX > 0 && safeHistoryIndex > 0) {
-                // Swiped left (finger moving left) -> Go to Newer month (smaller index)
                 setHistoryMonthIndex(prev => prev - 1);
             } else if (diffX < 0 && safeHistoryIndex < historyGroups.length - 1) {
-                // Swiped right (finger moving right) -> Go to Older month (larger index)
                 setHistoryMonthIndex(prev => prev + 1);
             }
         }
@@ -1043,14 +1084,11 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
-             {/* 防止左右滑動關閉的關鍵 CSS：
-                 overscroll-behavior-x: none 會阻止 Android Chrome 左右滑動回上一頁
-                 touch-action: pan-y (上面的 class) 會阻止 iOS Safari 水平滑動的預設行為
+             {/* overscroll-behavior-x: none 防止 Android 左右滑動關閉網頁
+                 touch-action: pan-y 防止 iOS Safari 預設的水平滑動上一頁
              */}
              <style>{`
-                 html, body { 
-                     overscroll-behavior-x: none; 
-                 }
+                 html, body { overscroll-behavior-x: none; touch-action: pan-y; }
                  .hide-scrollbar::-webkit-scrollbar { display: none; } 
                  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } 
                  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1060,7 +1098,7 @@ export default function App() {
 
              {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
-                <div className="w-10">
+                <div className="w-[80px] flex items-center">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
                         <Menu size={24} className="text-gray-700"/>
                     </button>
@@ -1076,8 +1114,14 @@ export default function App() {
                     )}
                 </div>
 
-                <div className="w-10 flex justify-end">
-                    {/* 返回按鈕移至右側 */}
+                <div className="w-[80px] flex justify-end gap-1">
+                    {/* APP 安裝按鈕 */}
+                    {showInstallBtn && (
+                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 w-8 h-8 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform" title="下載 APP">
+                            <Download size={16}/>
+                        </button>
+                    )}
+                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1086,10 +1130,12 @@ export default function App() {
                 </div>
              </div>
 
+             {/* iOS PWA 安裝教學彈窗 */}
+             {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
+
              {/* === HOME DASHBOARD VIEW === */}
              {currentView === 'home' && (
                  <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-                     {/* Expense Dashboard Card (加入柔和漸層背景與深邃立體陰影) */}
                      <div onClick={() => navigateTo('expense')} className="bg-gradient-to-b from-white to-gray-50/50 rounded-[2rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-gray-200/80 cursor-pointer transform active:scale-[0.98] transition-all relative overflow-hidden">
                         <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-2">
@@ -1099,7 +1145,6 @@ export default function App() {
                             <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                         </div>
 
-                        {/* Donut Chart Container */}
                         <div className="relative w-48 h-48 mx-auto mb-6 relative z-10">
                             <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-md">
                                 <circle r="15.9155" cx="18" cy="18" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
@@ -1113,7 +1158,6 @@ export default function App() {
                                     />
                                 ))}
                             </svg>
-                            {/* Center Text */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-white/30 rounded-full blur-[0.5px]"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                 <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest drop-shadow-sm">本月收支</div>
@@ -1122,7 +1166,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Legend */}
                         <div className="flex flex-wrap justify-center gap-2.5 relative z-10">
                             {pieChartData.length === 0 ? (
                                 <div className="text-xs text-gray-400 font-bold bg-white border border-gray-100 px-4 py-2 rounded-xl w-full text-center">本月尚無支出紀錄</div>
@@ -1136,7 +1179,6 @@ export default function App() {
                         </div>
                      </div>
 
-                     {/* Gold Dashboard Card */}
                      <div onClick={() => navigateTo('gold')} className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden cursor-pointer transform active:scale-[0.98] transition-all border border-orange-400/30">
                         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-10 -mb-10 blur-2xl pointer-events-none"></div>
                         <div className="flex justify-between items-center mb-6 relative z-10">
@@ -1231,7 +1273,7 @@ export default function App() {
                 </div>
              )}
 
-             {/* === HISTORY VIEW (Swipeable & Category Summary) === */}
+             {/* === HISTORY VIEW === */}
              {currentView === 'history' && (
                  <div 
                      className="p-4 space-y-5 animate-[fadeIn_0.3s]"
@@ -1242,49 +1284,22 @@ export default function App() {
                          <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center"><History size={40} className="mb-4 opacity-20"/>目前沒有任何歷史紀錄</div>
                      ) : (
                          <>
-                             {/* Swipeable Header */}
                              <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-sm border border-gray-100">
-                                 {/* Left Arrow: Go to Older month (Index + 1) */}
-                                 <button 
-                                    onClick={() => setHistoryMonthIndex(prev => Math.min(historyGroups.length - 1, prev + 1))} 
-                                    disabled={safeHistoryIndex === historyGroups.length - 1} 
-                                    className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === historyGroups.length - 1 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}
-                                 >
-                                     <ChevronLeft size={24}/>
-                                 </button>
+                                 <button onClick={() => setHistoryMonthIndex(prev => Math.min(historyGroups.length - 1, prev + 1))} disabled={safeHistoryIndex === historyGroups.length - 1} className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === historyGroups.length - 1 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}><ChevronLeft size={24}/></button>
                                  <div className="text-center select-none">
                                      <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(historyGroups[safeHistoryIndex].date)}</h3>
-                                     <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">
-                                         左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/>
-                                     </div>
+                                     <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
                                  </div>
-                                 {/* Right Arrow: Go to Newer month (Index - 1) */}
-                                 <button 
-                                    onClick={() => setHistoryMonthIndex(prev => Math.max(0, prev - 1))} 
-                                    disabled={safeHistoryIndex === 0} 
-                                    className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === 0 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}
-                                 >
-                                     <ChevronRight size={24}/>
-                                 </button>
+                                 <button onClick={() => setHistoryMonthIndex(prev => Math.max(0, prev - 1))} disabled={safeHistoryIndex === 0} className={`p-3 rounded-2xl transition-all ${safeHistoryIndex === 0 ? 'text-gray-200' : 'text-purple-600 hover:bg-purple-50 hover:shadow-sm'}`}><ChevronRight size={24}/></button>
                              </div>
 
-                             {/* Income / Expense Summary Card */}
                              <div className="grid grid-cols-2 gap-3">
-                                 <div className="bg-emerald-50 rounded-[1.5rem] p-4 border border-emerald-100 shadow-sm">
-                                     <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
-                                     <div className="text-xl font-black text-emerald-700">{formatMoney(historyGroups[safeHistoryIndex].totalIncome)}</div>
-                                 </div>
-                                 <div className="bg-rose-50 rounded-[1.5rem] p-4 border border-rose-100 shadow-sm">
-                                     <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
-                                     <div className="text-xl font-black text-rose-700">{formatMoney(historyGroups[safeHistoryIndex].totalExpense)}</div>
-                                 </div>
+                                 <div className="bg-emerald-50 rounded-[1.5rem] p-4 border border-emerald-100 shadow-sm"><div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div><div className="text-xl font-black text-emerald-700">{formatMoney(historyGroups[safeHistoryIndex].totalIncome)}</div></div>
+                                 <div className="bg-rose-50 rounded-[1.5rem] p-4 border border-rose-100 shadow-sm"><div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div><div className="text-xl font-black text-rose-700">{formatMoney(historyGroups[safeHistoryIndex].totalExpense)}</div></div>
                              </div>
 
-                             {/* Category Spending Summary */}
                              <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                     <PieChart size={16} className="text-purple-400"/> 分類支出排名
-                                 </h4>
+                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2"><PieChart size={16} className="text-purple-400"/> 分類支出排名</h4>
                                  <div className="space-y-3">
                                      {(() => {
                                          const currentGroup = historyGroups[safeHistoryIndex];
@@ -1296,24 +1311,16 @@ export default function App() {
                                              }
                                          });
                                          const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
-                                         
                                          if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl">本月無支出紀錄</div>;
-                                         
                                          return sortedCats.map(([catId, amount]) => {
                                              const cat = categories.find(c => c.id === catId);
                                              const IconComp = ICON_MAP[cat?.icon] || Tag;
                                              const percent = currentGroup.totalExpense > 0 ? ((amount / currentGroup.totalExpense) * 100).toFixed(1) : 0;
-                                             
                                              return (
                                                  <div key={catId} className="flex justify-between items-center">
                                                      <div className="flex items-center gap-3">
-                                                         <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-sm">
-                                                             <IconComp size={16}/>
-                                                         </div>
-                                                         <div>
-                                                             <div className="text-sm font-bold text-gray-700">{cat?.name || '其他'}</div>
-                                                             <div className="text-[10px] text-gray-400 font-bold">{percent}%</div>
-                                                         </div>
+                                                         <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-sm"><IconComp size={16}/></div>
+                                                         <div><div className="text-sm font-bold text-gray-700">{cat?.name || '其他'}</div><div className="text-[10px] text-gray-400 font-bold">{percent}%</div></div>
                                                      </div>
                                                      <span className="font-black text-gray-800">{formatMoney(amount)}</span>
                                                  </div>
@@ -1323,7 +1330,6 @@ export default function App() {
                                  </div>
                              </div>
 
-                             {/* Transaction List */}
                              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                                  {historyGroups[safeHistoryIndex].list.map((item, i) => {
                                       const cat = categories.find(c=>c.id===item.category);
