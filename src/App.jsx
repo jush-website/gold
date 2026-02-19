@@ -971,15 +971,16 @@ export default function App() {
                             <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                         </div>
 
-                        {/* Donut Chart Container */}
-                        <div className="relative w-40 h-40 mx-auto mb-6">
-                            <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90 drop-shadow-sm">
-                                <circle r="15.9155" cx="16" cy="16" fill="transparent" stroke="#f3f4f6" strokeWidth="4" />
+                        {/* Donut Chart Container (修復裁切問題並優化比例) */}
+                        <div className="relative w-48 h-48 mx-auto mb-6">
+                            <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-md">
+                                {/* 畫布改為 36x36，圓心在 18,18。半徑 15.9155 不變以維持 100% 計算公式 */}
+                                <circle r="15.9155" cx="18" cy="18" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
                                 {pieChartData.map(slice => (
                                     <circle 
                                         key={slice.id}
-                                        r="15.9155" cx="16" cy="16" fill="transparent" 
-                                        stroke={slice.color} strokeWidth="4" 
+                                        r="15.9155" cx="18" cy="18" fill="transparent" 
+                                        stroke={slice.color} strokeWidth="3.5" 
                                         strokeDasharray={slice.dashArray} strokeDashoffset={slice.offset}
                                         className="transition-all duration-1000 ease-out"
                                     />
@@ -987,9 +988,9 @@ export default function App() {
                             </svg>
                             {/* Center Text (收支出) */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <div className="text-[10px] font-bold text-gray-400 mb-1 tracking-widest">本月收支</div>
-                                <div className="text-[11px] font-black text-emerald-500 mb-0.5">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
-                                <div className="text-[11px] font-black text-rose-500">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
+                                <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest">本月收支</div>
+                                <div className="text-sm font-black text-emerald-500 mb-0.5">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
+                                <div className="text-sm font-black text-rose-500">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
                             </div>
                         </div>
 
