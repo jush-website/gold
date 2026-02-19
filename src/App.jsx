@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy
+  query, orderBy, where, getDocs
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
@@ -398,11 +398,9 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [type, setType] = useState(initialData?.type || 'expense');
     
-    // Auto-select first category of matching type if none selected
     const availableCats = categories.filter(c => c.type === type);
     const [category, setCategory] = useState(initialData?.category || (availableCats[0]?.id || ''));
     
-    // Update selected category when type changes if current is invalid
     useEffect(() => {
         if (!availableCats.find(c => c.id === category)) {
             setCategory(availableCats[0]?.id || '');
@@ -543,14 +541,12 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     );
 };
 
-const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
+const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
     const [editingId, setEditingId] = useState(null);
     const [name, setName] = useState('');
     const [icon, setIcon] = useState('tag');
     const [type, setType] = useState('expense');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-
-    if (!isOpen) return null;
 
     const handleEdit = (cat) => {
         setEditingId(cat.id);
@@ -572,69 +568,60 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]">
-            <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><LayoutGrid size={24} className="text-purple-600"/> 分類管理</h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
+        <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <div className="flex bg-gray-100 rounded-xl p-1 mb-6 shadow-inner border border-gray-100">
+                    <button onClick={()=>{setType('expense'); if(!editingId) setIcon('shopping-bag');}} className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${type==='expense'?'bg-red-50 text-red-600 shadow-sm':'text-gray-400'}`}>支出分類</button>
+                    <button onClick={()=>{setType('income'); if(!editingId) setIcon('wallet');}} className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${type==='income'?'bg-green-50 text-green-600 shadow-sm':'text-gray-400'}`}>收入分類</button>
+                </div>
+                
+                <div className="mb-5">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">分類名稱</label>
+                    <input value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"/>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-5">
-                    <div className="bg-gray-50 p-4 rounded-2xl mb-6 border border-gray-100">
-                        <div className="flex bg-white rounded-xl p-1 mb-4 shadow-sm border border-gray-100">
-                            <button onClick={()=>{setType('expense'); if(!editingId) setIcon('shopping-bag');}} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type==='expense'?'bg-red-50 text-red-600':'text-gray-400'}`}>支出分類</button>
-                            <button onClick={()=>{setType('income'); if(!editingId) setIcon('wallet');}} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type==='income'?'bg-green-50 text-green-600':'text-gray-400'}`}>收入分類</button>
-                        </div>
-                        
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">分類名稱</label>
-                            <input value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"/>
-                        </div>
-
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">選擇圖示</label>
-                            <div className="grid grid-cols-6 gap-2 bg-white p-3 rounded-xl border border-gray-200 h-40 overflow-y-auto">
-                                {Object.keys(ICON_MAP).map(iconKey => {
-                                    const IconComp = ICON_MAP[iconKey];
-                                    return (
-                                        <button key={iconKey} onClick={()=>setIcon(iconKey)} className={`aspect-square rounded-lg flex items-center justify-center transition-all ${icon === iconKey ? (type==='expense'?'bg-red-500 text-white shadow-md':'bg-green-500 text-white shadow-md') : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
-                                            <IconComp size={20}/>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                            {editingId && <button onClick={handleAddNew} className="py-3 px-4 font-bold text-gray-500 bg-gray-200 rounded-xl hover:bg-gray-300">取消</button>}
-                            <button onClick={handleSave} disabled={!name.trim()} className={`flex-1 py-3 text-white rounded-xl font-bold shadow-md transition-all ${type==='expense'?'bg-red-500 hover:bg-red-600 shadow-red-200':'bg-green-500 hover:bg-green-600 shadow-green-200'} disabled:opacity-50`}>
-                                {editingId ? '儲存修改' : '新增分類'}
-                            </button>
-                        </div>
+                <div className="mb-6">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">選擇圖示</label>
+                    <div className="grid grid-cols-6 gap-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 h-48 overflow-y-auto">
+                        {Object.keys(ICON_MAP).map(iconKey => {
+                            const IconComp = ICON_MAP[iconKey];
+                            return (
+                                <button key={iconKey} onClick={()=>setIcon(iconKey)} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${icon === iconKey ? (type==='expense'?'bg-red-500 text-white shadow-md':'bg-green-500 text-white shadow-md') : 'bg-white text-gray-400 hover:bg-gray-100 shadow-sm border border-gray-100'}`}>
+                                    <IconComp size={20}/>
+                                </button>
+                            )
+                        })}
                     </div>
+                </div>
 
-                    <div>
-                        <h4 className="font-bold text-gray-500 text-sm mb-3">現有{type==='expense'?'支出':'收入'}分類</h4>
-                        <div className="grid grid-cols-2 gap-3">
-                            {categories.filter(c=>c.type===type).map(cat => {
-                                const IconComp = ICON_MAP[cat.icon] || Tag;
-                                return (
-                                    <div key={cat.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-purple-200 transition-colors group">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${type==='expense'?'bg-red-50 text-red-500':'bg-green-50 text-green-500'}`}>
-                                                <IconComp size={16}/>
-                                            </div>
-                                            <span className="font-bold text-sm text-gray-700">{cat.name}</span>
-                                        </div>
-                                        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={()=>handleEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-500"><Edit2 size={14}/></button>
-                                            <button onClick={()=>setShowDeleteConfirm(cat)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={14}/></button>
-                                        </div>
+                <div className="flex gap-3">
+                    {editingId && <button onClick={handleAddNew} className="py-3.5 px-6 font-bold text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">取消</button>}
+                    <button onClick={handleSave} disabled={!name.trim()} className={`flex-1 py-3.5 text-white rounded-xl font-bold shadow-md transition-all ${type==='expense'?'bg-red-500 hover:bg-red-600 shadow-red-200':'bg-green-500 hover:bg-green-600 shadow-green-200'} disabled:opacity-50`}>
+                        {editingId ? '儲存修改' : '新增分類'}
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <h4 className="font-bold text-gray-800 text-base mb-4 flex items-center gap-2"><LayoutGrid size={18} className="text-purple-500"/> 現有{type==='expense'?'支出':'收入'}分類</h4>
+                <div className="grid grid-cols-2 gap-3">
+                    {categories.filter(c=>c.type===type).map(cat => {
+                        const IconComp = ICON_MAP[cat.icon] || Tag;
+                        return (
+                            <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-purple-200 transition-colors group">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm ${type==='expense'?'text-red-500':'text-green-500'}`}>
+                                        <IconComp size={18}/>
                                     </div>
-                                )
-                            })}
-                        </div>
-                    </div>
+                                    <span className="font-bold text-sm text-gray-700">{cat.name}</span>
+                                </div>
+                                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={()=>handleEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-500 bg-white rounded shadow-sm"><Edit2 size={12}/></button>
+                                    <button onClick={()=>setShowDeleteConfirm(cat)} className="p-1.5 text-gray-400 hover:text-red-500 bg-white rounded shadow-sm"><Trash2 size={12}/></button>
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
@@ -642,7 +629,7 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
     );
 };
 
-const Sidebar = ({ isOpen, onClose, currentView, setCurrentView, user, onLogout }) => {
+const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
     return (
         <>
             {isOpen && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={onClose} />}
@@ -655,15 +642,15 @@ const Sidebar = ({ isOpen, onClose, currentView, setCurrentView, user, onLogout 
                     
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
                     <div className="space-y-2 mb-8">
-                        <button onClick={() => { setCurrentView('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
-                        <button onClick={() => { setCurrentView('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
-                        <button onClick={() => { setCurrentView('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
+                        <button onClick={() => { navigateTo('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
+                        <button onClick={() => { navigateTo('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
+                        <button onClick={() => { navigateTo('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
                     </div>
 
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">資料與設定</div>
                     <div className="space-y-2">
-                        <button onClick={() => { setCurrentView('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
-                        <button onClick={() => { setCurrentView('categories'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'categories' ? 'bg-pink-500/20 text-pink-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Tag size={20} /> <span className="font-bold">分類管理</span></button>
+                        <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
+                        <button onClick={() => { navigateTo('categories'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'categories' ? 'bg-pink-500/20 text-pink-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Tag size={20} /> <span className="font-bold">分類管理</span></button>
                     </div>
                 </div>
                 <div className="p-6 border-t border-white/5">
@@ -679,7 +666,25 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [currentView, setCurrentView] = useState('home');
+    
+    // 全域歷史導覽堆疊
+    const [historyStack, setHistoryStack] = useState(['home']);
+    const currentView = historyStack[historyStack.length - 1];
+
+    const navigateTo = (view) => {
+        setHistoryStack(prev => {
+            const existingIndex = prev.indexOf(view);
+            if (existingIndex !== -1) {
+                // 如果畫面已在堆疊中，直接回到該畫面（避免無限循環堆疊）
+                return prev.slice(0, existingIndex + 1);
+            }
+            return [...prev, view];
+        });
+    };
+
+    const goBack = () => {
+        setHistoryStack(prev => prev.length > 1 ? prev.slice(0, -1) : ['home']);
+    };
 
     // Gold Data
     const [goldTransactions, setGoldTransactions] = useState([]);
@@ -850,7 +855,7 @@ export default function App() {
     };
     const handleCategoryDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); };
 
-    // 高度安全防護的計算邏輯 (避免資料殘缺導致白畫面)
+    // Calculations
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
@@ -912,7 +917,6 @@ export default function App() {
             groups[safeDate].list.push(e);
             if(e.type === 'expense') groups[safeDate].total -= (Number(e.amount) || 0);
         });
-        // 確保安全排序
         Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
@@ -941,11 +945,21 @@ export default function App() {
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
              <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
-             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} setCurrentView={setCurrentView} user={user} onLogout={() => signOut(auth)} />
+             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
              {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors"><Menu size={24} className="text-gray-700"/></button>
+                {/* 動態左上角按鈕：歷史大於1時顯示返回鍵，否則顯示漢堡選單 */}
+                {historyStack.length > 1 ? (
+                    <button onClick={goBack} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
+                        <ArrowLeft size={24} className="text-gray-700"/>
+                    </button>
+                ) : (
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
+                        <Menu size={24} className="text-gray-700"/>
+                    </button>
+                )}
+
                 <div className="font-black text-lg text-gray-800 flex items-center gap-2">
                     {currentView === 'expense' ? (
                         <div onClick={() => setShowBookManager(true)} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-xl transition-colors border border-transparent hover:border-gray-200">
@@ -961,20 +975,19 @@ export default function App() {
              {/* === HOME DASHBOARD VIEW === */}
              {currentView === 'home' && (
                  <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-                     {/* Expense Dashboard Card (圓餅圖總覽) */}
-                     <div onClick={() => setCurrentView('expense')} className="bg-white rounded-[2rem] p-6 shadow-xl shadow-gray-200/50 border border-gray-100 cursor-pointer transform active:scale-[0.98] transition-all">
-                        <div className="flex justify-between items-center mb-6">
+                     {/* Expense Dashboard Card (加入柔和漸層背景與深邃立體陰影) */}
+                     <div onClick={() => navigateTo('expense')} className="bg-gradient-to-b from-white to-gray-50/50 rounded-[2rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-gray-200/80 cursor-pointer transform active:scale-[0.98] transition-all relative overflow-hidden">
+                        <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-2">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
                                 <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || '生活記帳'}</span>
                             </div>
-                            <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
+                            <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                         </div>
 
-                        {/* Donut Chart Container (修復裁切問題並優化比例) */}
-                        <div className="relative w-48 h-48 mx-auto mb-6">
+                        {/* Donut Chart Container */}
+                        <div className="relative w-48 h-48 mx-auto mb-6 relative z-10">
                             <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-md">
-                                {/* 畫布改為 36x36，圓心在 18,18。半徑 15.9155 不變以維持 100% 計算公式 */}
                                 <circle r="15.9155" cx="18" cy="18" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
                                 {pieChartData.map(slice => (
                                     <circle 
@@ -986,20 +999,21 @@ export default function App() {
                                     />
                                 ))}
                             </svg>
-                            {/* Center Text (收支出) */}
+                            {/* Center Text */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-white/30 rounded-full blur-[0.5px]"></div>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest">本月收支</div>
-                                <div className="text-sm font-black text-emerald-500 mb-0.5">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
-                                <div className="text-sm font-black text-rose-500">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
+                                <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest drop-shadow-sm">本月收支</div>
+                                <div className="text-sm font-black text-emerald-500 mb-0.5 drop-shadow-sm">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
+                                <div className="text-sm font-black text-rose-500 drop-shadow-sm">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
                             </div>
                         </div>
 
-                        {/* Legend (各個分類花費區間小點) */}
-                        <div className="flex flex-wrap justify-center gap-2.5">
+                        {/* Legend */}
+                        <div className="flex flex-wrap justify-center gap-2.5 relative z-10">
                             {pieChartData.length === 0 ? (
-                                <div className="text-xs text-gray-400 font-bold bg-gray-50 px-4 py-2 rounded-xl w-full text-center">本月尚無支出紀錄</div>
+                                <div className="text-xs text-gray-400 font-bold bg-white border border-gray-100 px-4 py-2 rounded-xl w-full text-center">本月尚無支出紀錄</div>
                             ) : pieChartData.map(slice => (
-                                <div key={slice.id} className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-sm">
+                                <div key={slice.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-sm hover:shadow transition-shadow">
                                     <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: slice.color}}></span>
                                     <span className="text-[10px] text-gray-600 font-bold">{slice.name}</span>
                                     <span className="text-[10px] text-gray-800 font-black">{slice.percent.toFixed(0)}%</span>
@@ -1009,7 +1023,7 @@ export default function App() {
                      </div>
 
                      {/* Gold Dashboard Card */}
-                     <div onClick={() => setCurrentView('gold')} className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden cursor-pointer transform active:scale-[0.98] transition-all border border-orange-400/30">
+                     <div onClick={() => navigateTo('gold')} className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden cursor-pointer transform active:scale-[0.98] transition-all border border-orange-400/30">
                         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-10 -mb-10 blur-2xl pointer-events-none"></div>
                         <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-2"><div className="p-2 bg-white/20 rounded-xl backdrop-blur-md"><Coins size={18}/></div><span className="font-bold tracking-wide">我的金庫</span></div>
@@ -1150,7 +1164,7 @@ export default function App() {
 
              {/* === CATEGORY MANAGER VIEW === */}
              {currentView === 'categories' && (
-                 <CategoryManager isOpen={true} onClose={()=>setCurrentView('home')} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} />
+                 <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} />
              )}
         </div>
     );
