@@ -712,6 +712,70 @@ export default function App() {
     const [editingExpense, setEditingExpense] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
+    // --- PWA (Progressive Web App) App 安裝設定 ---
+    useEffect(() => {
+        // 1. 設定 iOS 與 Android 的 App 外觀 Meta Tags
+        const metaTags = [
+            { name: 'theme-color', content: '#f9fafb' }, // 匹配系統背景色
+            { name: 'apple-mobile-web-app-capable', content: 'yes' }, // 允許 iOS 全螢幕執行
+            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, // iOS 狀態列樣式
+            { name: 'apple-mobile-web-app-title', content: '資產管家' }, // iOS 桌面顯示名稱
+            { name: 'mobile-web-app-capable', content: 'yes' } // Android 全螢幕執行
+        ];
+
+        metaTags.forEach(({ name, content }) => {
+            let meta = document.querySelector(`meta[name="${name}"]`);
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = name;
+                document.head.appendChild(meta);
+            }
+            meta.content = content;
+        });
+
+        // 2. 動態產生 manifest.json (讓瀏覽器識別為可安裝的 App)
+        const manifest = {
+            name: "資產管家",
+            short_name: "資產管家",
+            description: "您的專屬黃金與記帳管理工具",
+            start_url: window.location.pathname,
+            display: "standalone", // 關鍵：隱藏瀏覽器網址列，呈現原生 App 視覺
+            background_color: "#f9fafb",
+            theme_color: "#f9fafb",
+            icons: [
+                {
+                    // 內建一個精美的 SVG App 圖示 (深藍色底帶錢幣符號)
+                    src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJiNjNiNCIgcng9IjIyIi8+PHRleHQgeD0iNTAiIHk9IjUxIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iNDUiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPiQ8L3RleHQ+PC9zdmc+",
+                    sizes: "192x192 512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }
+            ]
+        };
+
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        
+        let link = document.querySelector('link[rel="manifest"]');
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'manifest';
+            document.head.appendChild(link);
+        }
+        link.href = manifestUrl;
+
+        // 3. 設定 iOS 專用的桌面圖示
+        let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (!appleIcon) {
+            appleIcon = document.createElement('link');
+            appleIcon.rel = 'apple-touch-icon';
+            appleIcon.href = manifest.icons[0].src;
+            document.head.appendChild(appleIcon);
+        }
+
+        return () => URL.revokeObjectURL(manifestUrl);
+    }, []);
+
     useEffect(() => {
         if (!document.getElementById('tailwind-script')) {
             const script = document.createElement('script');
