@@ -100,6 +100,12 @@ const formatDate = (dateString) => {
     return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
 };
 
+const formatMonth = (dateString) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
+};
+
 // --- Firebase Init ---
 let app, auth, db, googleProvider;
 const isConfigured = !!firebaseConfig.apiKey; 
@@ -657,6 +663,28 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
     );
 };
 
+// --- PWA ANDROID INSTALL PROMPT ---
+const AndroidInstallPrompt = ({ onClose }) => {
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
+            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out] mb-4" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-5">
+                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                        <div className="bg-green-50 p-2 rounded-xl text-green-500"><Download size={20}/></div> 安裝到手機
+                    </h3>
+                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"><X size={18}/></button>
+                </div>
+                <div className="text-sm text-gray-600 space-y-4 font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="flex items-center gap-2">1. 點擊瀏覽器右上角的 <MoreVertical size={18} className="text-gray-500"/> (選單)</p>
+                    <p className="flex items-center gap-2">2. 找到並點擊 <span className="bg-white border border-gray-200 px-2 py-1 rounded-lg text-xs shadow-sm flex items-center gap-1">加到主畫面 <Plus size={12}/></span></p>
+                    <p className="flex items-center gap-2">3. 點擊「新增」即可完成安裝！</p>
+                </div>
+                <button onClick={onClose} className="w-full mt-6 py-3.5 bg-green-600 text-white rounded-xl font-bold shadow-md shadow-green-200 active:scale-95 transition-transform">我知道了</button>
+            </div>
+        </div>
+    );
+};
+
 // --- PWA iOS INSTALL PROMPT ---
 const IOSInstallPrompt = ({ onClose }) => {
     return (
@@ -705,6 +733,7 @@ export default function App() {
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showInstallBtn, setShowInstallBtn] = useState(false);
     const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+    const [showAndroidPrompt, setShowAndroidPrompt] = useState(false);
     const [isIOS, setIsIOS] = useState(false);
 
     // Gold Data
@@ -725,12 +754,12 @@ export default function App() {
     const [allExpenses, setAllExpenses] = useState([]);
     const [categories, setCategories] = useState([]);
     
-    // History specific state (無限滑動日曆與分頁)
+    // History specific state
     const [currentHistoryDate, setCurrentHistoryDate] = useState(() => {
         const now = new Date();
         return new Date(now.getFullYear(), now.getMonth(), 1);
     });
-    const [historyTab, setHistoryTab] = useState('stats'); // 'stats' | 'list'
+    const [historyTab, setHistoryTab] = useState('stats'); 
     const [touchStartX, setTouchStartX] = useState(null);
     const [touchStartY, setTouchStartY] = useState(null);
 
@@ -739,7 +768,6 @@ export default function App() {
     const [editingExpense, setEditingExpense] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
-    // --- 載入 Tailwind 樣式 (已加回) ---
     useEffect(() => {
         if (!document.getElementById('tailwind-script')) {
             const script = document.createElement('script');
@@ -770,7 +798,6 @@ export default function App() {
             meta.content = content;
         });
 
-        // 取得當前網站的絕對網址 (例如 https://your-app.vercel.app/gold.png)
         const absoluteIconUrl = window.location.origin + "/gold.png";
 
         const manifest = {
@@ -788,7 +815,6 @@ export default function App() {
         if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
         link.href = manifestUrl;
 
-        // 設定 iOS 專用的桌面圖示 (使用絕對路徑)
         let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
         if (!appleIcon) { 
             appleIcon = document.createElement('link'); 
@@ -833,7 +859,8 @@ export default function App() {
                 setShowInstallBtn(false);
             }
         } else {
-            alert('請點擊瀏覽器右上角的「選單」按鈕，選擇「加到主畫面」來安裝 App。');
+            // 如果無法彈出原生視窗，顯示自訂的 Android 教學彈窗
+            setShowAndroidPrompt(true);
         }
     };
 
@@ -970,7 +997,6 @@ export default function App() {
     };
     const handleCategoryDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); };
 
-    // --- Calculations ---
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
@@ -1036,10 +1062,9 @@ export default function App() {
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
-    // --- 歷史紀錄專屬邏輯 (按月篩選) ---
+    // 歷史紀錄篩選
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
     
-    // 取出當前月份的所有紀錄
     const currentHistoryRecords = useMemo(() => {
         return allExpenses.filter(e => {
             const safeDate = e.date || new Date().toISOString().split('T')[0];
@@ -1063,13 +1088,13 @@ export default function App() {
         const diffX = touchStartX - touchEndX;
         const diffY = Math.abs(touchStartY - touchEndY);
 
-        // 判斷是否為明確的水平滑動
+        // 水平滑動判斷
         if (Math.abs(diffX) > 50 && diffY < 50) {
             if (diffX > 0) {
-                // 手指往左滑 (看舊一點的/下一個月份)
+                // 手指向左滑 -> 看更舊的月份 (-1)
                 setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
             } else if (diffX < 0) {
-                // 手指往右滑 (看新一點的/上一個月份)
+                // 手指向右滑 -> 看更新的月份 (+1)
                 setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
             }
         }
@@ -1085,9 +1110,9 @@ export default function App() {
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': currentBook?.name || '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理' };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
+        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
              {/* overscroll-behavior-x: none 防止 Android 左右滑動關閉網頁
-                 touch-action: pan-y 防止 iOS Safari 預設的水平滑動上一頁
+                 touch-action: pan-y 防止 iOS Safari 水平滑動上一頁 
              */}
              <style>{`
                  html, body { overscroll-behavior-x: none; touch-action: pan-y; }
@@ -1116,14 +1141,12 @@ export default function App() {
                     )}
                 </div>
 
-                <div className="w-[80px] flex justify-end gap-1">
-                    {/* APP 安裝按鈕 */}
+                <div className="w-[80px] flex justify-end gap-1 items-center">
                     {showInstallBtn && (
-                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 w-8 h-8 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform" title="下載 APP">
+                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 w-8 h-8 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform mr-1" title="下載 APP">
                             <Download size={16}/>
                         </button>
                     )}
-                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1131,6 +1154,9 @@ export default function App() {
                     )}
                 </div>
              </div>
+
+             {/* Android PWA 安裝教學彈窗 */}
+             {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
 
              {/* iOS PWA 安裝教學彈窗 */}
              {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
@@ -1275,30 +1301,27 @@ export default function App() {
                 </div>
              )}
 
-             {/* === HISTORY VIEW (Swipeable & Tabs) === */}
+             {/* === HISTORY VIEW (Swipeable) === */}
              {currentView === 'history' && (
                  <div 
                      className="p-4 space-y-5 animate-[fadeIn_0.3s]"
                      onTouchStart={handleTouchStart}
                      onTouchEnd={handleTouchEnd}
                  >
-                     {/* Month Navigator */}
                      <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
                          <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
                          <div className="text-center select-none">
-                             <h3 className="text-xl font-black text-gray-800 tracking-wide">{currentHistoryDate.getFullYear()}年 {currentHistoryDate.getMonth() + 1}月</h3>
+                             <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(currentHistoryDate.toISOString())}</h3>
                              <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
                          </div>
                          <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
                      </div>
 
-                     {/* Tabs Toggle */}
                      <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
                          <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
                          <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
                      </div>
 
-                     {/* Content Area */}
                      {currentHistoryRecords.length === 0 ? (
                          <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
                              <History size={40} className="mb-4 opacity-20"/>
@@ -1306,7 +1329,6 @@ export default function App() {
                          </div>
                      ) : (
                          <>
-                             {/* Tab 1: Stats */}
                              {historyTab === 'stats' && (
                                  <div className="space-y-4 animate-[fadeIn_0.3s]">
                                      <div className="grid grid-cols-2 gap-3">
@@ -1363,7 +1385,6 @@ export default function App() {
                                  </div>
                              )}
 
-                             {/* Tab 2: Transaction List */}
                              {historyTab === 'list' && (
                                  <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] overflow-hidden animate-[fadeIn_0.3s]">
                                      {currentHistoryRecords.map((item, i) => {
