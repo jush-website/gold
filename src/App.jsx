@@ -648,38 +648,66 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
     const handleImport = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) return;
+        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) {
+            e.target.value = ''; // 使用者取消時重置 input
+            return;
+        }
         
         setIsLoading(true);
         const reader = new FileReader();
+        
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                if (!data.books || !data.allExpenses) throw new Error("無效的備份檔案格式");
+                if (!data.books && !data.allExpenses && !data.goldTransactions) {
+                    throw new Error("無效的備份檔案格式");
+                }
 
-                // Sequentially set documents to restore them with original IDs
+                // 強化版：安全匯入函數
                 const importCollection = async (collectionName, items) => {
+                    // 如果沒有該集合的資料，或格式不正確，直接跳過
+                    if (!items || !Array.isArray(items)) return; 
+                    
                     const promises = items.map(item => {
+                        // 防呆防錯：確保資料存在且擁有有效 ID，否則跳過
+                        if (!item || !item.id) return Promise.resolve(); 
+                        
                         const { id, ...payload } = item;
-                        return setDoc(doc(db, 'artifacts', appId, 'users', user.uid, collectionName, id), payload);
+                        
+                        // 解決 indexOf 錯誤的核心：將路徑組合成純字串，避免 null 段落導致 Firebase 崩潰
+                        const docPath = `artifacts/${appId}/users/${user.uid}/${collectionName}/${id}`;
+                        return setDoc(doc(db, docPath), payload);
                     });
+                    
                     await Promise.all(promises);
                 };
 
-                if (data.goldTransactions) await importCollection('gold_transactions', data.goldTransactions);
-                if (data.books) await importCollection('account_books', data.books);
-                if (data.allExpenses) await importCollection('expense_transactions', data.allExpenses);
-                if (data.categories) await importCollection('expense_categories', data.categories);
+                // 依序匯入所有模組資料
+                await importCollection('gold_transactions', data.goldTransactions);
+                await importCollection('account_books', data.books);
+                await importCollection('expense_transactions', data.allExpenses);
+                await importCollection('expense_categories', data.categories);
 
-                alert("資料還原成功！");
+                alert("資料還原成功！系統將自動重新整理以套用新資料。");
+                
+                // 還原成功後強制重整頁面，確保 React 狀態與 Firebase 完全同步
+                setTimeout(() => window.location.reload(), 500); 
+
             } catch (error) {
-                console.error(error);
+                console.error("還原錯誤:", error);
                 alert("還原失敗：" + error.message);
             } finally {
                 setIsLoading(false);
-                e.target.value = ''; 
+                e.target.value = ''; // 重置 input 讓下次可以選同一個檔案
             }
         };
+        
+        reader.onerror = () => {
+            alert("讀取檔案失敗，請檢查檔案是否損毀。");
+            setIsLoading(false);
+            e.target.value = '';
+        };
+        
         reader.readAsText(file);
     };
 
