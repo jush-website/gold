@@ -16,7 +16,8 @@ import {
   ShieldCheck, User, Store, Menu, Wallet, Book,
   ArrowRight, ArrowLeft, MoreVertical, CreditCard,
   ShoppingBag, ShoppingCart, Truck, Home, Utensils,
-  Smartphone, Plane, Gift, Divide, X as XIcon, Equal, Minus, Settings, Key
+  Smartphone, Plane, Gift, Divide, X as XIcon, Equal, Minus, Settings, Key,
+  History
 } from 'lucide-react';
 
 // --- Firebase Configuration Management ---
@@ -107,6 +108,11 @@ const formatDate = (dateString) => {
     return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
 };
 
+const formatMonth = (dateString) => {
+    const d = new Date(dateString);
+    return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
+};
+
 // --- Firebase Init ---
 let app, auth, db, googleProvider;
 const isConfigured = !!firebaseConfig.apiKey; // Check if we have a key from ANY source
@@ -123,7 +129,7 @@ if (isConfigured) {
     }
 }
 
-// 修正：將 ID 改回 v1 以讀取舊有資料
+// 保持使用 v1 以讀取舊有黃金資料，同時儲存新的記帳資料
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v1';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
@@ -146,7 +152,7 @@ const AppLoading = () => (
   </div>
 );
 
-// 2. Configuration Screen (Fallback for Preview Environment)
+// 2. Configuration Screen
 const ConfigScreen = () => {
     const [key, setKey] = useState('');
     const [saving, setSaving] = useState(false);
@@ -166,40 +172,22 @@ const ConfigScreen = () => {
                     <div className="p-3 bg-yellow-500/10 rounded-xl"><Settings size={24}/></div>
                     <h1 className="text-xl font-bold">系統設定</h1>
                 </div>
-                
                 <p className="text-gray-400 mb-6 text-sm leading-relaxed">
                     在您的本地環境中，系統會自動讀取 <code>.env</code> 變數。
                     <br/><br/>
                     但在目前的預覽環境中無法讀取環境變數，請手動輸入 Firebase API Key 以啟動系統。
                 </p>
-
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Project ID</label>
-                        <div className="bg-gray-900/50 p-3 rounded-xl text-gray-400 font-mono text-sm border border-gray-700">
-                            {defaultConfig.projectId}
-                        </div>
+                        <div className="bg-gray-900/50 p-3 rounded-xl text-gray-400 font-mono text-sm border border-gray-700">{defaultConfig.projectId}</div>
                     </div>
-
                     <div>
-                        <label className="text-xs font-bold text-blue-400 uppercase mb-2 block flex items-center gap-1">
-                            <Key size={12}/> Firebase API Key
-                        </label>
-                        <input 
-                            type="text" 
-                            value={key} 
-                            onChange={(e) => setKey(e.target.value)}
-                            placeholder="貼上您的 API Key" 
-                            className="w-full bg-gray-900 p-3 rounded-xl border border-gray-600 focus:border-blue-500 outline-none font-mono text-sm transition-colors"
-                        />
+                        <label className="text-xs font-bold text-blue-400 uppercase mb-2 block flex items-center gap-1"><Key size={12}/> Firebase API Key</label>
+                        <input type="text" value={key} onChange={(e) => setKey(e.target.value)} placeholder="貼上您的 API Key" className="w-full bg-gray-900 p-3 rounded-xl border border-gray-600 focus:border-blue-500 outline-none font-mono text-sm transition-colors"/>
                     </div>
                 </div>
-
-                <button 
-                    onClick={handleSave} 
-                    disabled={!key || saving}
-                    className="w-full mt-8 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
+                <button onClick={handleSave} disabled={!key || saving} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
                     {saving ? <Loader2 className="animate-spin" size={20}/> : '儲存並啟動'}
                 </button>
             </div>
@@ -232,29 +220,12 @@ const LoginView = () => {
                 </div>
                 <h1 className="text-3xl font-black text-white mb-2">資產管家</h1>
                 <p className="text-gray-400 mb-8">黃金投資 • 生活記帳 • 財務自由</p>
-                
-                {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2">
-                         <AlertCircle size={16} className="shrink-0 mt-0.5"/>
-                         <span>{error}</span>
-                    </div>
-                )}
-                
+                {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5"/><span>{error}</span></div>}
                 <button onClick={handleGoogleLogin} disabled={loading} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl mb-3 flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">
-                    {loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 
-                    使用 Google 登入
+                    {loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 使用 Google 登入
                 </button>
-                
-                <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500">
-                    <ShieldCheck size={14} />
-                    <span>Google 安全驗證 • 資料加密儲存</span>
-                </div>
-
-                {!isEnvConfigured && (
-                    <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">
-                        重設預覽 API Key
-                    </button>
-                )}
+                <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
+                {!isEnvConfigured && <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">重設預覽 API Key</button>}
             </div>
         </div>
     );
@@ -296,13 +267,9 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
             <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={toggleVisibility}>
                 <div>
                     <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm font-bold text-gray-400 flex items-center gap-1">
-                             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>賣出金價
-                        </span>
+                        <span className="text-sm font-bold text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>賣出金價</span>
                     </div>
-                    <div className="text-3xl font-black text-gray-800 tracking-tight flex items-baseline gap-2">
-                        {formatMoney(goldPrice)} <span className="text-sm text-gray-400 font-normal">/克</span>
-                    </div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight flex items-baseline gap-2">{formatMoney(goldPrice)} <span className="text-sm text-gray-400 font-normal">/克</span></div>
                 </div>
                 {isVisible ? <ChevronUp size={20} className="text-gray-300"/> : <ChevronDown size={20} className="text-gray-300"/>}
             </div>
@@ -336,7 +303,6 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
 };
 
 const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
-    // ... (Use same logic as before, just simplified for this file)
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [unit, setUnit] = useState(initialData?.weight ? 'g' : 'g'); 
     const [weightInput, setWeightInput] = useState(initialData?.weight ? initialData.weight.toString() : '');
@@ -360,7 +326,6 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20} /></button>
                 </div>
                 <div className="p-4 space-y-4 overflow-y-auto">
-                    {/* Inputs Simplified for length */}
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400">購買日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-transparent font-bold"/></div>
                     <div className="flex gap-2">
                          <div className="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400">重量 ({unit})</label><input type="number" value={weightInput} onChange={e=>setWeightInput(e.target.value)} className="w-full bg-transparent text-2xl font-black"/></div>
@@ -376,15 +341,13 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
     );
 };
 
-// 3. Gold Calculator/Converter (Restored)
+// 3. Gold Calculator
 const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
     const [amount, setAmount] = useState('');
     const [unit, setUnit] = useState('g'); 
-
     const getGrams = () => {
         const val = parseFloat(amount);
         if (isNaN(val)) return 0;
-        
         switch(unit) {
             case 'g': return val;
             case 'tw_qian': return val * 3.75;
@@ -394,70 +357,32 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
             default: return 0;
         }
     };
-
     const grams = getGrams();
-    
     const displayValues = {
         twd: grams * goldPrice,
         g: grams,
         tw_qian: grams / 3.75,
         tw_liang: grams / 37.5,
     };
-
     return (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 transition-all duration-300">
-            <button 
-                onClick={toggleVisibility}
-                className="w-full p-4 flex items-center justify-between bg-gray-50/50 hover:bg-gray-100 transition-colors"
-            >
-                <div className="flex items-center gap-2 font-bold text-gray-700">
-                    <Calculator size={18} className="text-blue-600"/>
-                    黃金計算機
-                </div>
+            <button onClick={toggleVisibility} className="w-full p-4 flex items-center justify-between bg-gray-50/50 hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-2 font-bold text-gray-700"><Calculator size={18} className="text-blue-600"/>黃金計算機</div>
                 {isVisible ? <ChevronUp size={18} className="text-gray-400"/> : <ChevronDown size={18} className="text-gray-400"/>}
             </button>
-
             {isVisible && (
                 <div className="p-5 animate-[fadeIn_0.3s]">
                     <div className="flex gap-2 mb-4">
-                        <div className="relative flex-1">
-                            <input 
-                                type="number" 
-                                value={amount} 
-                                onChange={(e) => setAmount(e.target.value)} 
-                                placeholder="0" 
-                                className="w-full bg-gray-50 text-2xl font-black text-gray-800 p-3 rounded-xl border-2 border-transparent focus:border-blue-400 outline-none transition-colors"
-                            />
-                        </div>
-                        <select 
-                            value={unit} 
-                            onChange={(e) => setUnit(e.target.value)}
-                            className="bg-gray-100 font-bold text-gray-600 rounded-xl px-2 outline-none border-r-[10px] border-transparent cursor-pointer"
-                        >
-                            <option value="g">公克 (g)</option>
-                            <option value="tw_qian">台錢</option>
-                            <option value="tw_liang">台兩</option>
-                            <option value="twd">金額 (NTD)</option>
+                        <div className="relative flex-1"><input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="w-full bg-gray-50 text-2xl font-black text-gray-800 p-3 rounded-xl border-2 border-transparent focus:border-blue-400 outline-none transition-colors"/></div>
+                        <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bg-gray-100 font-bold text-gray-600 rounded-xl px-2 outline-none border-r-[10px] border-transparent cursor-pointer">
+                            <option value="g">公克 (g)</option><option value="tw_qian">台錢</option><option value="tw_liang">台兩</option><option value="twd">金額 (NTD)</option>
                         </select>
                     </div>
-
                     <div className="grid grid-cols-2 gap-3">
-                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
-                            <div className="text-[10px] text-gray-400 mb-1">價值 (TWD)</div>
-                            <div className="font-black text-gray-800 text-lg">{formatMoney(displayValues.twd)}</div>
-                        </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'tw_liang' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
-                            <div className="text-[10px] text-gray-400 mb-1">台兩</div>
-                            <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 3 }).format(displayValues.tw_liang)} <span className="text-xs font-normal text-gray-400">兩</span></div>
-                        </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'tw_qian' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
-                            <div className="text-[10px] text-gray-400 mb-1">台錢</div>
-                            <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.tw_qian)} <span className="text-xs font-normal text-gray-400">錢</span></div>
-                        </div>
-                        <div className={`p-3 rounded-xl border ${unit === 'g' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}>
-                            <div className="text-[10px] text-gray-400 mb-1">公克 (g)</div>
-                            <div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.g)} <span className="text-xs font-normal text-gray-400">克</span></div>
-                        </div>
+                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">價值 (TWD)</div><div className="font-black text-gray-800 text-lg">{formatMoney(displayValues.twd)}</div></div>
+                        <div className={`p-3 rounded-xl border ${unit === 'tw_liang' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">台兩</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 3 }).format(displayValues.tw_liang)} <span className="text-xs font-normal text-gray-400">兩</span></div></div>
+                        <div className={`p-3 rounded-xl border ${unit === 'tw_qian' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">台錢</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.tw_qian)} <span className="text-xs font-normal text-gray-400">錢</span></div></div>
+                        <div className={`p-3 rounded-xl border ${unit === 'g' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">公克 (g)</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.g)} <span className="text-xs font-normal text-gray-400">克</span></div></div>
                     </div>
                 </div>
             )}
@@ -485,7 +410,7 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
                 // Safe evaluation for simple math
                 // eslint-disable-next-line no-new-func
                 const result = new Function('return ' + expression.replace(/[^0-9+\-*/.]/g, ''))();
-                const final = Number(result).toFixed(0); // Assuming integer for currency usually
+                const final = Number(result).toFixed(0); 
                 setDisplay(final);
                 setExpression(final);
                 onResult(final);
@@ -493,7 +418,6 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
                 setDisplay('Error');
             }
         } else {
-            // Prevent multiple operators
             const lastChar = expression.slice(-1);
             if (['+','-','*','/'].includes(key) && ['+','-','*','/'].includes(lastChar)) {
                  const newExp = expression.slice(0, -1) + key;
@@ -532,23 +456,11 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
         <div className="bg-gray-50 border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] rounded-t-3xl overflow-hidden pb-6">
             <div className="p-4 bg-white border-b border-gray-100 flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400">計算金額</span>
-                <div className="text-3xl font-black text-gray-800 tracking-wider truncate max-w-[250px] text-right">
-                    {display}
-                </div>
+                <div className="text-3xl font-black text-gray-800 tracking-wider truncate max-w-[250px] text-right">{display}</div>
             </div>
             <div className="grid grid-cols-4 gap-1 p-2 bg-gray-100">
                 {keys.map((k, i) => (
-                    <button 
-                        key={i}
-                        onClick={() => handlePress(k.val)}
-                        className={`
-                            ${k.colSpan === 2 ? 'col-span-2' : ''}
-                            ${k.rowSpan === 2 ? 'row-span-2 h-full' : 'h-14'}
-                            ${k.type === 'submit' ? 'bg-blue-600 text-white' : 'bg-white text-gray-800'}
-                            ${k.color || ''}
-                            rounded-xl font-bold text-xl shadow-sm active:scale-95 transition-transform flex items-center justify-center
-                        `}
-                    >
+                    <button key={i} onClick={() => handlePress(k.val)} className={`${k.colSpan===2?'col-span-2':''} ${k.rowSpan===2?'row-span-2 h-full':'h-14'} ${k.type==='submit'?'bg-blue-600 text-white':'bg-white text-gray-800'} ${k.color||''} rounded-xl font-bold text-xl shadow-sm active:scale-95 transition-transform flex items-center justify-center`}>
                         {k.label}
                     </button>
                 ))}
@@ -563,19 +475,12 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [category, setCategory] = useState(initialData?.category || categories[0]?.id);
     const [note, setNote] = useState(initialData?.note || '');
-    const [type, setType] = useState(initialData?.type || 'expense'); // 'expense' or 'income'
+    const [type, setType] = useState(initialData?.type || 'expense');
     const [showKeypad, setShowKeypad] = useState(false);
 
     const handleSubmit = () => {
         if (!amount || parseFloat(amount) === 0) return;
-        onSave({ 
-            amount: parseFloat(amount), 
-            date, 
-            category, 
-            note, 
-            type,
-            bookId 
-        });
+        onSave({ amount: parseFloat(amount), date, category, note, type, bookId });
     };
 
     const categoryIcons = {
@@ -591,7 +496,6 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
 
     return (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]">
-             {/* Main Modal Area */}
              <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                     <div className="flex bg-gray-100 rounded-lg p-1">
@@ -600,25 +504,12 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                
                 <div className="p-5 space-y-5 overflow-y-auto pb-32 sm:pb-5">
-                    {/* Amount Display / Trigger */}
                     <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-6 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
                          <div className="text-xs font-bold opacity-60 mb-1">金額</div>
-                         <div className="text-4xl font-black flex items-center justify-center gap-1">
-                             <span>$</span>
-                             <span>{amount || '0'}</span>
-                             <Pencil size={16} className="opacity-30 ml-2"/>
-                         </div>
+                         <div className="text-4xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={16} className="opacity-30 ml-2"/></div>
                     </div>
-
-                    {/* Date */}
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                        <label className="text-xs font-bold text-gray-400 mb-1 block">日期</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent w-full font-bold outline-none"/>
-                    </div>
-
-                    {/* Categories */}
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">日期</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent w-full font-bold outline-none"/></div>
                     <div>
                         <label className="text-xs font-bold text-gray-400 mb-2 block">分類</label>
                         <div className="grid grid-cols-4 gap-2">
@@ -626,41 +517,17 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
                                 const Icon = categoryIcons[c.icon] || Tag;
                                 return (
                                     <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${category===c.id ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0'}`}>
-                                        <Icon size={20} className="mb-1"/>
-                                        <span className="text-[10px] font-bold">{c.name}</span>
+                                        <Icon size={20} className="mb-1"/><span className="text-[10px] font-bold">{c.name}</span>
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
-
-                    {/* Note */}
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                        <label className="text-xs font-bold text-gray-400 mb-1 block">備註</label>
-                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/>
-                    </div>
-
-                    {!showKeypad && (
-                        <div className="pt-2 space-y-3">
-                            <button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">
-                                {initialData ? '更新紀錄' : '確認記帳'}
-                            </button>
-                            {initialData && <button onClick={()=>onDelete(initialData.id)} className="w-full py-3 text-red-500 bg-red-50 rounded-2xl font-bold">刪除紀錄</button>}
-                        </div>
-                    )}
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
+                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '更新紀錄' : '確認記帳'}</button>{initialData && <button onClick={()=>onDelete(initialData.id)} className="w-full py-3 text-red-500 bg-red-50 rounded-2xl font-bold">刪除紀錄</button>}</div>)}
                 </div>
              </div>
-             
-             {/* Keypad Slide Up */}
-             {showKeypad && (
-                 <div className="w-full sm:max-w-md absolute bottom-0 z-[70] animate-[slideUp_0.2s_ease-out]">
-                     <CalculatorKeypad 
-                        initialValue={amount}
-                        onResult={(val) => { setAmount(val); setShowKeypad(false); }} 
-                        onClose={() => setShowKeypad(false)} 
-                     />
-                 </div>
-             )}
+             {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70] animate-[slideUp_0.2s_ease-out]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
         </div>
     );
 };
@@ -669,47 +536,29 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
 const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [newBookName, setNewBookName] = useState('');
-    
     if (!isOpen) return null;
-
     const handleCreate = () => {
         if(!newBookName.trim()) return;
         onSaveBook({ name: newBookName });
         setNewBookName('');
         setIsEditing(false);
     };
-
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
             <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-lg text-gray-800">切換/管理帳本</h3>
-                    <button onClick={onClose}><X size={20} className="text-gray-400"/></button>
-                </div>
-
+                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg text-gray-800">切換/管理帳本</h3><button onClick={onClose}><X size={20} className="text-gray-400"/></button></div>
                 <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto">
                     {books.map(book => (
                         <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`p-3 rounded-xl flex justify-between items-center cursor-pointer border ${book.id === currentBookId ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}>
-                            <div className="flex items-center gap-3">
-                                <Book size={18} className={book.id === currentBookId ? 'text-blue-500' : 'text-gray-400'}/>
-                                <span className={`font-bold ${book.id === currentBookId ? 'text-blue-700' : 'text-gray-600'}`}>{book.name}</span>
-                            </div>
-                            {book.id !== currentBookId && (
-                                <button onClick={(e)=>{e.stopPropagation(); if(confirm('刪除此帳本?')) onDeleteBook(book.id)}} className="p-2 text-gray-300 hover:text-red-500"><Trash2 size={14}/></button>
-                            )}
+                            <div className="flex items-center gap-3"><Book size={18} className={book.id === currentBookId ? 'text-blue-500' : 'text-gray-400'}/><span className={`font-bold ${book.id === currentBookId ? 'text-blue-700' : 'text-gray-600'}`}>{book.name}</span></div>
+                            {book.id !== currentBookId && (<button onClick={(e)=>{e.stopPropagation(); if(confirm('刪除此帳本?')) onDeleteBook(book.id)}} className="p-2 text-gray-300 hover:text-red-500"><Trash2 size={14}/></button>)}
                         </div>
                     ))}
                 </div>
-
                 {isEditing ? (
-                    <div className="flex gap-2">
-                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="新帳本名稱" className="flex-1 bg-gray-100 rounded-xl px-3 text-sm font-bold outline-none border border-transparent focus:border-blue-400"/>
-                        <button onClick={handleCreate} className="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm">新增</button>
-                    </div>
+                    <div className="flex gap-2"><input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="新帳本名稱" className="flex-1 bg-gray-100 rounded-xl px-3 text-sm font-bold outline-none border border-transparent focus:border-blue-400"/><button onClick={handleCreate} className="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm">新增</button></div>
                 ) : (
-                    <button onClick={() => setIsEditing(true)} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold text-sm hover:bg-gray-50 flex items-center justify-center gap-2">
-                        <Plus size={16}/> 新增帳本
-                    </button>
+                    <button onClick={() => setIsEditing(true)} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold text-sm hover:bg-gray-50 flex items-center justify-center gap-2"><Plus size={16}/> 新增帳本</button>
                 )}
             </div>
         </div>
@@ -724,29 +573,17 @@ const Sidebar = ({ isOpen, onClose, currentView, setCurrentView, user, onLogout 
             <div className={`fixed top-0 left-0 bottom-0 w-64 bg-gray-900 text-white z-[100] transform transition-transform duration-300 shadow-2xl ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-6">
                     <div className="flex items-center gap-3 mb-8">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
-                            {user?.displayName?.[0] || 'U'}
-                        </div>
-                        <div>
-                            <div className="font-bold text-sm">{user?.displayName}</div>
-                            <div className="text-[10px] text-gray-400">Basic Plan</div>
-                        </div>
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">{user?.displayName?.[0] || 'U'}</div>
+                        <div><div className="font-bold text-sm">{user?.displayName}</div><div className="text-[10px] text-gray-400">Basic Plan</div></div>
                     </div>
-
                     <div className="space-y-2">
-                        <button onClick={() => { setCurrentView('gold'); onClose(); }} className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}`}>
-                            <Coins size={20} /> <span className="font-bold">黃金存摺</span>
-                        </button>
-                        <button onClick={() => { setCurrentView('expense'); onClose(); }} className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-400 hover:bg-gray-800'}`}>
-                            <CreditCard size={20} /> <span className="font-bold">生活記帳</span>
-                        </button>
+                        <button onClick={() => { setCurrentView('gold'); onClose(); }} className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
+                        <button onClick={() => { setCurrentView('expense'); onClose(); }} className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-400 hover:bg-gray-800'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
+                        <button onClick={() => { setCurrentView('history'); onClose(); }} className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-400 hover:bg-gray-800'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
                     </div>
                 </div>
-
                 <div className="absolute bottom-6 left-6 right-6">
-                     <button onClick={onLogout} className="w-full p-3 rounded-xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors">
-                        <LogOut size={16}/> 登出
-                     </button>
+                     <button onClick={onLogout} className="w-full p-3 rounded-xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors"><LogOut size={16}/> 登出</button>
                 </div>
             </div>
         </>
@@ -759,7 +596,7 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [currentView, setCurrentView] = useState('gold'); // Default view restored to Gold
+    const [currentView, setCurrentView] = useState('gold');
 
     // Gold Data
     const [goldTransactions, setGoldTransactions] = useState([]);
@@ -771,7 +608,7 @@ export default function App() {
     const [showGoldAdd, setShowGoldAdd] = useState(false);
     const [editingGold, setEditingGold] = useState(null);
     const [showChart, setShowChart] = useState(false);
-    const [showConverter, setShowConverter] = useState(false); // Added missing state
+    const [showConverter, setShowConverter] = useState(false);
 
     // Expense Data
     const [books, setBooks] = useState([]);
@@ -794,13 +631,10 @@ export default function App() {
 
     // 1. Auth Listener
     useEffect(() => {
-        if (!isConfigured) return; // Skip if no config
-
+        if (!isConfigured) return; 
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
-            if(u) {
-                fetchGoldPrice();
-            }
+            if(u) { fetchGoldPrice(); }
             setLoading(false);
         });
         return () => unsubscribe();
@@ -821,7 +655,7 @@ export default function App() {
             setBooks(b);
             if (b.length > 0 && !currentBookId) setCurrentBookId(b[0].id);
             if (b.length === 0) {
-                 // Create default book if none
+                 // Auto-create default book if none exists
                  addDoc(booksRef, { name: '日常帳本', createdAt: serverTimestamp(), color: 'blue' });
             }
         });
@@ -829,7 +663,7 @@ export default function App() {
         return () => { unsubGold(); unsubBooks(); };
     }, [user]);
 
-    // Expense Listener (Dependant on currentBookId)
+    // Expense Listener
     useEffect(() => {
         if (!user || !currentBookId || !isConfigured) return;
         const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books', currentBookId, 'transactions'), orderBy('date', 'desc'));
@@ -838,15 +672,10 @@ export default function App() {
     }, [user, currentBookId]);
 
     // 3. Actions
-    // ============================================
-    // 修改：現在會優先嘗試後端 API，失敗則自動切換到前端抓取
-    // ============================================
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
         try {
-            // 1. 優先嘗試呼叫後端 API (正式環境/本地後端)
             const response = await fetch('/api/gold').catch(e => { console.log('Backend API failed, trying client-side fallback...'); return null; });
-            
             if (response && response.ok) {
                 const data = await response.json();
                 if (data.success) {
@@ -857,24 +686,16 @@ export default function App() {
                     return;
                 }
             }
-
-            // 2. 如果後端沒反應 (例如在預覽環境)，嘗試前端直接抓取 Yahoo Finance (透過 CORS Proxy)
-            // 這讓您在沒有後端的情況下也能看到真實波動
+            // Fallback (Client-Side)
             const yahooGold = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo')).then(r => r.json());
             const yahooTwd = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=1d')).then(r => r.json());
-
             if (yahooGold.chart.result && yahooTwd.chart.result) {
                 const gQuote = yahooGold.chart.result[0];
                 const tQuote = yahooTwd.chart.result[0];
                 const twdRate = tQuote.meta.regularMarketPrice;
                 const currentGoldUsd = gQuote.meta.regularMarketPrice;
-                
-                // 換算: (美金金價 * 匯率) / 31.1035 (盎司轉克) * 1.002 (些微溢價)
                 const priceTwd = Math.floor((currentGoldUsd * twdRate / 31.1035) * 1.005);
-                
                 setGoldPrice(priceTwd);
-                
-                // 處理歷史數據
                 const timestamps = gQuote.timestamp;
                 const closePrices = gQuote.indicators.quote[0].close;
                 const historyData = timestamps.map((ts, i) => {
@@ -883,24 +704,17 @@ export default function App() {
                         date: new Date(ts * 1000).toISOString().split('T')[0],
                         price: Math.floor((closePrices[i] * twdRate / 31.1035) * 1.005)
                     };
-                }).filter(x => x).slice(-30); // 取最近30天
-
+                }).filter(x => x).slice(-30);
                 setGoldHistory(historyData);
-                setGoldIntraday([]); // 前端簡易版暫不處理 intraday
-            } else {
-                throw new Error("Client side fetch failed");
-            }
-
+                setGoldIntraday([]); 
+            } else { throw new Error("Client side fetch failed"); }
         } catch (e) { 
             console.error("All fetch methods failed:", e); 
             useFallbackData();
-        } finally { 
-            setPriceLoading(false); 
-        }
+        } finally { setPriceLoading(false); }
     };
 
     const useFallbackData = () => {
-        // Fallback mock data if API fails (e.g. in preview environment)
         setGoldPrice(2950);
         setGoldHistory([{date:'2023-10-25', price:2900}, {date:'2023-10-26', price:2950}, {date:'2023-10-27', price:2920}, {date:'2023-10-28', price:2950}]);
         setGoldIntraday([{date:'09:00', price:2940}, {date:'12:00', price:2950}]);
@@ -919,6 +733,7 @@ export default function App() {
     };
 
     const handleBookSave = async (data) => {
+        if (!user) return;
         await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
     };
 
@@ -929,6 +744,7 @@ export default function App() {
     };
 
     const handleExpenseSave = async (data) => {
+        if (!user || !data.bookId) return;
         const { bookId, ...payload } = data;
         const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books', bookId, 'transactions');
         if (editingExpense) await updateDoc(doc(ref, editingExpense.id), { ...payload, updatedAt: serverTimestamp() });
@@ -946,15 +762,34 @@ export default function App() {
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
     const goldProfit = goldCurrentVal - goldTotalCost;
+    const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
 
-    // Expense Grouping
+    // Expense Grouping (All)
     const groupedExpenses = useMemo(() => {
         const groups = {};
         expenses.forEach(e => {
+            // Group by Month: YYYY-MM
+            const monthKey = e.date.substring(0, 7); 
+            if(!groups[monthKey]) groups[monthKey] = { date: monthKey, list: [], totalIncome: 0, totalExpense: 0 };
+            groups[monthKey].list.push(e);
+            if(e.type === 'expense') groups[monthKey].totalExpense += e.amount;
+            else groups[monthKey].totalIncome += e.amount;
+        });
+        // Sort by date desc within each month, and sort months desc
+        Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date) - new Date(a.date)));
+        return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
+    }, [expenses]);
+
+    // Group expenses by Date for current month view
+    const dailyExpenses = useMemo(() => {
+        const groups = {};
+        expenses.forEach(e => {
+            // Filter only current month for the main view? Or all? User requested "当月紀錄要顯示在總攬"
+            // Let's show all in daily view for now, but usually it's limited.
+            // Let's just group by YYYY-MM-DD
             if(!groups[e.date]) groups[e.date] = { date: e.date, list: [], total: 0 };
             groups[e.date].list.push(e);
             if(e.type === 'expense') groups[e.date].total -= e.amount;
-            // else groups[e.date].total += e.amount; // Optional: Daily net
         });
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
@@ -970,7 +805,6 @@ export default function App() {
         return { income, expense, balance: income - expense };
     }, [expenses]);
 
-    // --- Categories Definition ---
     const expenseCategories = [
         { id: 'shopee', name: '蝦皮', icon: 'shopee' },
         { id: 'taobao', name: '淘寶', icon: 'taobao' },
@@ -992,159 +826,77 @@ export default function App() {
         <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
              <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
              
-             <Sidebar 
-                isOpen={isSidebarOpen} 
-                onClose={() => setIsSidebarOpen(false)} 
-                currentView={currentView}
-                setCurrentView={setCurrentView}
-                user={user}
-                onLogout={() => signOut(auth)}
-             />
+             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} setCurrentView={setCurrentView} user={user} onLogout={() => signOut(auth)} />
 
-             {/* TOP NAVIGATION BAR (Shared) */}
+             {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-sm">
                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-100"><Menu size={24} className="text-gray-700"/></button>
                 <div className="font-black text-lg text-gray-800 flex items-center gap-2">
-                    {currentView === 'gold' ? (
-                        <><Coins size={20} className="text-yellow-500"/> 黃金存摺</>
-                    ) : (
-                        <div onClick={() => setShowBookManager(true)} className="flex items-center gap-1 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded-lg transition-colors">
-                            <span className="max-w-[120px] truncate">{currentBook?.name || '載入中...'}</span>
-                            <ChevronDown size={16} className="text-gray-400"/>
-                        </div>
-                    )}
+                    {currentView === 'gold' ? <><Coins size={20} className="text-yellow-500"/> 黃金存摺</> : currentView === 'history' ? <><History size={20} className="text-purple-500"/> 歷史紀錄</> : <div onClick={() => setShowBookManager(true)} className="flex items-center gap-1 cursor-pointer hover:bg-gray-100 px-2 py-1 rounded-lg transition-colors"><span className="max-w-[120px] truncate">{currentBook?.name || '載入中...'}</span><ChevronDown size={16} className="text-gray-400"/></div>}
                 </div>
-                <div className="w-8"></div> {/* Spacer for balance */}
+                <div className="w-8"></div>
              </div>
 
-             {currentView === 'gold' ? (
-                // --- GOLD VIEW ---
+             {/* === GOLD VIEW === */}
+             {currentView === 'gold' && (
                 <div className="p-4 space-y-4 animate-[fadeIn_0.3s]">
-                    {/* Dashboard Card */}
                     <div className="bg-gradient-to-br from-yellow-500 to-amber-600 rounded-[2rem] p-6 text-white shadow-xl shadow-yellow-500/20 relative overflow-hidden">
                          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                          <div className="text-yellow-100 text-xs font-bold mb-1">黃金總市值</div>
                          <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
                          <div className="grid grid-cols-2 gap-4">
-                             <div className="bg-white/10 backdrop-blur rounded-xl p-3">
-                                 <div className="text-xs text-yellow-100 opacity-80">持有 (錢)</div>
-                                 <div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div>
-                             </div>
-                             <div className="bg-white/10 backdrop-blur rounded-xl p-3">
-                                 <div className="text-xs text-yellow-100 opacity-80">損益</div>
-                                 <div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div>
-                             </div>
+                             <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-yellow-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
+                             <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-yellow-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
+                         </div>
+                         {/* Added Cost Info */}
+                         <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center text-sm">
+                             <div className="flex flex-col"><span className="text-yellow-100/70 text-[10px]">購入總成本</span><span className="font-bold">{formatMoney(goldTotalCost)}</span></div>
+                             <div className="flex flex-col text-right"><span className="text-yellow-100/70 text-[10px]">平均成本</span><span className="font-bold">{formatMoney(goldAvgCost)}/g</span></div>
                          </div>
                     </div>
-                    
-                    <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
-                        <Plus size={20}/> 紀錄一筆黃金
-                    </button>
-
-                    {/* Gold Converter (Restored) */}
-                    <GoldConverter 
-                        goldPrice={goldPrice}
-                        isVisible={showConverter}
-                        toggleVisibility={() => setShowConverter(!showConverter)}
-                    />
-
-                    <GoldChart 
-                        data={goldHistory} 
-                        intraday={goldIntraday} 
-                        period={goldPeriod} 
-                        setPeriod={setGoldPeriod}
-                        goldPrice={goldPrice}
-                        loading={priceLoading}
-                        isVisible={showChart}
-                        toggleVisibility={()=>setShowChart(!showChart)}
-                    />
-
+                    <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
+                    <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
+                    <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
                     <div className="space-y-3">
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                         {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
                          goldTransactions.map(t => (
                              <div key={t.id} onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm active:scale-95 transition-transform">
-                                 <div className="flex items-center gap-3">
-                                     <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600 font-bold"><Scale size={18}/></div>
-                                     <div>
-                                         <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
-                                         <div className="text-xs text-gray-400">{t.date}</div>
-                                     </div>
-                                 </div>
-                                 <div className="text-right">
-                                     <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                     <div className={`text-xs font-bold ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500':'text-red-500'}`}>
-                                         {(t.weight*goldPrice - t.totalCost) >=0 ? '+':''}{formatMoney(t.weight*goldPrice - t.totalCost)}
-                                     </div>
-                                 </div>
+                                 <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600 font-bold"><Scale size={18}/></div><div><div className="font-bold text-gray-800">{formatWeight(t.weight)}</div><div className="text-xs text-gray-400">{t.date}</div></div></div>
+                                 <div className="text-right"><div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div><div className={`text-xs font-bold ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500':'text-red-500'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '+':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div></div>
                              </div>
                          ))
                         }
                     </div>
-
                     {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} onDelete={handleGoldDelete} initialData={editingGold} />}
                 </div>
-             ) : (
-                // --- EXPENSE VIEW ---
+             )}
+
+             {/* === EXPENSE VIEW === */}
+             {currentView === 'expense' && (
                 <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-                    {/* Expense Dashboard */}
                     <div className="bg-white rounded-[2rem] p-6 shadow-xl shadow-gray-200/50 border border-gray-100">
-                        <div className="flex justify-between items-center mb-6">
-                            <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">本月概況</span>
-                            <span className="text-xs font-bold text-gray-400">{new Date().getMonth()+1}月</span>
-                        </div>
-                        <div className="text-center mb-8">
-                             <div className="text-gray-400 text-xs font-bold mb-1">本月結餘</div>
-                             <div className={`text-4xl font-black tracking-tight ${currentMonthStats.balance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                                {formatMoney(currentMonthStats.balance)}
-                             </div>
-                        </div>
+                        <div className="flex justify-between items-center mb-6"><span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">本月概況</span><span className="text-xs font-bold text-gray-400">{new Date().getMonth()+1}月</span></div>
+                        <div className="text-center mb-8"><div className="text-gray-400 text-xs font-bold mb-1">本月結餘</div><div className={`text-4xl font-black tracking-tight ${currentMonthStats.balance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatMoney(currentMonthStats.balance)}</div></div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-green-50 p-3 rounded-2xl border border-green-100">
-                                <div className="flex items-center gap-1 text-green-600 text-xs font-bold mb-1"><ArrowLeft size={12}/> 收入</div>
-                                <div className="font-black text-gray-800 text-lg">{formatMoney(currentMonthStats.income)}</div>
-                            </div>
-                            <div className="bg-red-50 p-3 rounded-2xl border border-red-100">
-                                <div className="flex items-center gap-1 text-red-500 text-xs font-bold mb-1">支出 <ArrowRight size={12}/></div>
-                                <div className="font-black text-gray-800 text-lg">{formatMoney(currentMonthStats.expense)}</div>
-                            </div>
+                            <div className="bg-green-50 p-3 rounded-2xl border border-green-100"><div className="flex items-center gap-1 text-green-600 text-xs font-bold mb-1"><ArrowLeft size={12}/> 收入</div><div className="font-black text-gray-800 text-lg">{formatMoney(currentMonthStats.income)}</div></div>
+                            <div className="bg-red-50 p-3 rounded-2xl border border-red-100"><div className="flex items-center gap-1 text-red-500 text-xs font-bold mb-1">支出 <ArrowRight size={12}/></div><div className="font-black text-gray-800 text-lg">{formatMoney(currentMonthStats.expense)}</div></div>
                         </div>
                     </div>
-
-                    <button onClick={() => { setEditingExpense(null); setShowExpenseAdd(true); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200 active:scale-95 transition-transform">
-                        <Plus size={20}/> 記一筆
-                    </button>
-
-                    {/* Transaction List Grouped */}
+                    <button onClick={() => { setEditingExpense(null); setShowExpenseAdd(true); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200 active:scale-95 transition-transform"><Plus size={20}/> 記一筆</button>
                     <div className="space-y-4 pb-10">
-                        {groupedExpenses.length === 0 ? (
-                            <div className="text-center py-10 flex flex-col items-center">
-                                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div>
-                                <div className="text-gray-400 font-bold">這個月還沒有記帳喔</div>
-                            </div>
-                        ) : groupedExpenses.map((group, idx) => (
+                        {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
                             <div key={idx}>
-                                <div className="flex justify-between items-end px-2 mb-2">
-                                    <div className="font-bold text-gray-400 text-sm">{formatDate(group.date)}</div>
-                                    <div className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold">日支 {formatMoney(Math.abs(group.total))}</div>
-                                </div>
+                                <div className="flex justify-between items-end px-2 mb-2"><div className="font-bold text-gray-400 text-sm">{formatDate(group.date)}</div><div className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold">日支 {formatMoney(Math.abs(group.total))}</div></div>
                                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                                     {group.list.map((item, i) => {
-                                        const CatIcon = expenseCategories.find(c=>c.id===item.category)?.icon === 'shopee' ? ShoppingBag : Tag;
                                         return (
                                             <div key={item.id} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className={`p-4 flex justify-between items-center active:bg-gray-50 transition-colors ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${item.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                                                        {item.type === 'income' ? <Plus size={18}/> : <Minus size={18}/>}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-gray-800 text-sm">{expenseCategories.find(c=>c.id===item.category)?.name || '其他'}</div>
-                                                        <div className="text-xs text-gray-400 max-w-[150px] truncate">{item.note || '無備註'}</div>
-                                                    </div>
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${item.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{item.type === 'income' ? <Plus size={18}/> : <Minus size={18}/>}</div>
+                                                    <div><div className="font-bold text-gray-800 text-sm">{expenseCategories.find(c=>c.id===item.category)?.name || '其他'}</div><div className="text-xs text-gray-400 max-w-[150px] truncate">{item.note || '無備註'}</div></div>
                                                 </div>
-                                                <div className={`font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-800'}`}>
-                                                    {formatMoney(item.amount)}
-                                                </div>
+                                                <div className={`font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-800'}`}>{formatMoney(item.amount)}</div>
                                             </div>
                                         );
                                     })}
@@ -1152,28 +904,44 @@ export default function App() {
                             </div>
                         ))}
                     </div>
-
-                    {showExpenseAdd && (
-                        <AddExpenseModal 
-                            onClose={() => setShowExpenseAdd(false)} 
-                            onSave={handleExpenseSave} 
-                            onDelete={handleExpenseDelete}
-                            initialData={editingExpense} 
-                            categories={expenseCategories}
-                            bookId={currentBookId}
-                        />
-                    )}
-
-                    <BookManager 
-                        isOpen={showBookManager} 
-                        onClose={() => setShowBookManager(false)} 
-                        books={books}
-                        onSaveBook={handleBookSave}
-                        onDeleteBook={handleBookDelete}
-                        currentBookId={currentBookId}
-                        setCurrentBookId={setCurrentBookId}
-                    />
+                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} onDelete={handleExpenseDelete} initialData={editingExpense} categories={expenseCategories} bookId={currentBookId} />}
+                    <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} />
                 </div>
+             )}
+
+             {/* === HISTORY VIEW (New) === */}
+             {currentView === 'history' && (
+                 <div className="p-4 space-y-6 animate-[fadeIn_0.3s]">
+                     {groupedExpenses.length === 0 ? (
+                         <div className="text-center py-20 text-gray-400 font-bold">目前沒有任何歷史紀錄</div>
+                     ) : groupedExpenses.map((group) => (
+                         <div key={group.date}>
+                             <div className="flex justify-between items-center mb-3 px-2">
+                                 <h3 className="text-lg font-black text-gray-700">{formatMonth(group.date)}</h3>
+                                 <div className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-lg">
+                                     收: {formatMoney(group.totalIncome)} / 支: {formatMoney(group.totalExpense)}
+                                 </div>
+                             </div>
+                             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                                 {group.list.map((item, i) => (
+                                     <div key={item.id} className={`p-4 flex justify-between items-center ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                         <div className="flex items-center gap-3">
+                                             <div className="text-xs font-bold text-gray-400 w-10 text-center">
+                                                 <div className="text-lg text-gray-800">{new Date(item.date).getDate()}</div>
+                                                 <div>日</div>
+                                             </div>
+                                             <div>
+                                                 <div className="font-bold text-gray-800 text-sm">{expenseCategories.find(c=>c.id===item.category)?.name || '其他'}</div>
+                                                 <div className="text-xs text-gray-400 max-w-[150px] truncate">{item.note}</div>
+                                             </div>
+                                         </div>
+                                         <div className={`font-bold ${item.type === 'income' ? 'text-green-600' : 'text-gray-800'}`}>{formatMoney(item.amount)}</div>
+                                     </div>
+                                 ))}
+                             </div>
+                         </div>
+                     ))}
+                 </div>
              )}
         </div>
     );
