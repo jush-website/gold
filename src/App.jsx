@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy, where, getDocs
+  query, orderBy
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
@@ -64,14 +64,12 @@ if (!isEnvConfigured) {
 
 // --- Helper Functions ---
 const formatMoney = (amount, currency = 'TWD') => {
-  const num = Number(amount);
-  if (isNaN(num)) return '$0';
+  const num = Number(amount) || 0;
   return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: currency, maximumFractionDigits: 0 }).format(num);
 };
 
 const formatWeight = (grams, unit = 'tw_qian') => { 
-    const num = Number(grams);
-    if (isNaN(num)) return '0.00';
+    const num = Number(grams) || 0;
     if (unit === 'tw_qian') return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 3.75) + '錢';
     if (unit === 'tw_liang') return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(num / 37.5) + '兩';
     return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) + '克';
@@ -94,12 +92,14 @@ const compressImage = (base64Str, maxWidth = 800, quality = 0.6) => {
 };
 
 const formatDate = (dateString) => {
+    if (!dateString) return '';
     const d = new Date(dateString);
     const days = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
 };
 
 const formatMonth = (dateString) => {
+    if (!dateString) return '';
     const d = new Date(dateString);
     return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
 };
@@ -209,24 +209,28 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
         if (!data || data.length === 0) return [];
         return period === '10d' ? data.slice(-10) : data.slice(-90);
     }, [data, intraday, period]);
-    const prices = chartData.map(d => d.price);
-    const minPrice = Math.min(...prices) * 0.999;
-    const maxPrice = Math.max(...prices) * 1.001;
+
+    const prices = chartData.map(d => Number(d.price) || 0);
+    const minPrice = prices.length ? Math.min(...prices) * 0.999 : 0;
+    const maxPrice = prices.length ? Math.max(...prices) * 1.001 : 100;
     const range = maxPrice - minPrice || 100;
-    const getY = (price) => 100 - ((price - minPrice) / range) * 100;
-    const getX = (index) => (index / (chartData.length - 1)) * 100;
+    
+    const getY = (price) => 100 - (((Number(price) || 0) - minPrice) / range) * 100;
+    const getX = (index) => (index / (Math.max(1, chartData.length - 1))) * 100;
     const points = chartData.map((d, i) => [getX(i), getY(d.price)]);
     const svgPath = (points) => points.reduce((acc, point, i) => i === 0 ? `M ${point[0]},${point[1]}` : `${acc} L ${point[0]},${point[1]}`, '');
     const pathD = points.length > 1 ? svgPath(points) : '';
     const fillPathD = points.length > 1 ? `${pathD} L 100,100 L 0,100 Z` : '';
+
     const handleMouseMove = (e) => {
         if (!containerRef.current || chartData.length === 0) return;
         const rect = containerRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left; 
         let index = Math.round((x / rect.width) * (chartData.length - 1));
         index = Math.max(0, Math.min(index, chartData.length - 1));
-        setHoverData({ index, item: chartData[index], xPos: (index / (chartData.length - 1)) * 100 });
+        setHoverData({ index, item: chartData[index], xPos: (index / (Math.max(1, chartData.length - 1))) * 100 });
     };
+
     return (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative z-0 transition-all duration-300">
             <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={toggleVisibility}>
@@ -455,11 +459,10 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
     );
 };
 
-// 3. Book Manager Modal (美化升級版)
 const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [newBookName, setNewBookName] = useState('');
-    const [editingBook, setEditingBook] = useState(null); // {id, name}
+    const [editingBook, setEditingBook] = useState(null); 
     const [bookToDelete, setBookToDelete] = useState(null);
     
     if (!isOpen) return null;
@@ -540,7 +543,6 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     );
 };
 
-// 4. Category Manager Modal (New Feature)
 const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
     const [editingId, setEditingId] = useState(null);
     const [name, setName] = useState('');
@@ -561,7 +563,6 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
         setEditingId(null);
         setName('');
         setIcon('tag');
-        // keep current type
     };
 
     const handleSave = () => {
@@ -579,7 +580,6 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5">
-                    {/* Input Area */}
                     <div className="bg-gray-50 p-4 rounded-2xl mb-6 border border-gray-100">
                         <div className="flex bg-white rounded-xl p-1 mb-4 shadow-sm border border-gray-100">
                             <button onClick={()=>{setType('expense'); if(!editingId) setIcon('shopping-bag');}} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type==='expense'?'bg-red-50 text-red-600':'text-gray-400'}`}>支出分類</button>
@@ -613,7 +613,6 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
                         </div>
                     </div>
 
-                    {/* List Area */}
                     <div>
                         <h4 className="font-bold text-gray-500 text-sm mb-3">現有{type==='expense'?'支出':'收入'}分類</h4>
                         <div className="grid grid-cols-2 gap-3">
@@ -643,7 +642,6 @@ const CategoryManager = ({ isOpen, onClose, categories, onSave, onDelete }) => {
     );
 };
 
-// 5. Sidebar Navigation
 const Sidebar = ({ isOpen, onClose, currentView, setCurrentView, user, onLogout }) => {
     return (
         <>
@@ -681,7 +679,7 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [currentView, setCurrentView] = useState('home'); // Default to new Dashboard
+    const [currentView, setCurrentView] = useState('home');
 
     // Gold Data
     const [goldTransactions, setGoldTransactions] = useState([]);
@@ -698,8 +696,8 @@ export default function App() {
     // Expense Data
     const [books, setBooks] = useState([]);
     const [currentBookId, setCurrentBookId] = useState(null);
-    const [expenses, setExpenses] = useState([]);
-    const [categories, setCategories] = useState([]); // Custom categories
+    const [allExpenses, setAllExpenses] = useState([]);
+    const [categories, setCategories] = useState([]);
     
     // UI State
     const [showExpenseAdd, setShowExpenseAdd] = useState(false);
@@ -726,15 +724,13 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // Load User Data (Gold, Books, Categories)
+    // Load Gold, Books, Categories
     useEffect(() => {
         if (!user || !isConfigured) return;
 
-        // 1. Gold
         const goldQ = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), orderBy('date', 'desc'));
         const unsubGold = onSnapshot(goldQ, (snap) => setGoldTransactions(snap.docs.map(d => ({id:d.id, ...d.data()}))));
 
-        // 2. Books
         const booksRef = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books');
         const unsubBooks = onSnapshot(query(booksRef, orderBy('createdAt', 'desc')), (snap) => {
             const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
@@ -747,11 +743,9 @@ export default function App() {
             }
         });
 
-        // 3. Categories
         const catRef = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories');
         const unsubCat = onSnapshot(query(catRef, orderBy('createdAt', 'asc')), (snap) => {
             if (snap.empty) {
-                // Seed Default Categories
                 const defaults = [
                     { name: '餐飲', icon: 'utensils', type: 'expense' }, { name: '日常', icon: 'home', type: 'expense' },
                     { name: '網購', icon: 'shopping-cart', type: 'expense' }, { name: '交通', icon: 'bus', type: 'expense' },
@@ -766,19 +760,20 @@ export default function App() {
         return () => { unsubGold(); unsubBooks(); unsubCat(); };
     }, [user]);
 
-    // Load Expenses for all books (flattened logic for history)
-    const [allExpenses, setAllExpenses] = useState([]);
+    // Load All Expenses securely
     useEffect(() => {
         if (!user || !isConfigured) return;
         const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), orderBy('date', 'desc'));
         const unsub = onSnapshot(q, (snap) => {
-            const data = snap.docs.map(d => ({id:d.id, ...d.data()}));
-            setAllExpenses(data);
-            // Filter for current book
-            if(currentBookId) setExpenses(data.filter(e => e.bookId === currentBookId));
+            setAllExpenses(snap.docs.map(d => ({id:d.id, ...d.data()})));
         });
         return () => unsub();
-    }, [user, currentBookId]);
+    }, [user, isConfigured]);
+
+    const expenses = useMemo(() => {
+        if (!currentBookId) return [];
+        return allExpenses.filter(e => e.bookId === currentBookId);
+    }, [allExpenses, currentBookId]);
 
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
@@ -807,7 +802,7 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
-    // Data Handlers
+    // Actions
     const handleGoldSave = async (data) => {
         try {
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
@@ -850,14 +845,12 @@ export default function App() {
             if (data.id) {
                 const { id, ...payload } = data;
                 await updateDoc(doc(ref, id), { ...payload, updatedAt: serverTimestamp() });
-            } else {
-                await addDoc(ref, { ...data, createdAt: serverTimestamp() });
-            }
+            } else { await addDoc(ref, { ...data, createdAt: serverTimestamp() }); }
         } catch(e) { alert("儲存分類失敗: " + e.message); }
     };
     const handleCategoryDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); };
 
-    // Calculations
+    // 高度安全防護的計算邏輯 (避免資料殘缺導致白畫面)
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
@@ -866,21 +859,29 @@ export default function App() {
 
     const currentMonthStats = useMemo(() => {
         const now = new Date();
-        const thisMonth = expenses.filter(e => new Date(e.date).getMonth() === now.getMonth() && new Date(e.date).getFullYear() === now.getFullYear());
-        const income = thisMonth.filter(e => e.type === 'income').reduce((a,b) => a + b.amount, 0);
-        const expense = thisMonth.filter(e => e.type === 'expense').reduce((a,b) => a + b.amount, 0);
+        const thisMonth = expenses.filter(e => {
+            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const d = new Date(safeDate);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        const income = thisMonth.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
+        const expense = thisMonth.filter(e => e.type === 'expense').reduce((a,b) => a + (Number(b.amount) || 0), 0);
         return { income, expense, balance: income - expense };
     }, [expenses]);
 
-    // 計算圓餅圖所需的分類數據
     const pieChartData = useMemo(() => {
         const now = new Date();
-        const thisMonthExpenses = expenses.filter(e => e.type === 'expense' && new Date(e.date).getMonth() === now.getMonth() && new Date(e.date).getFullYear() === now.getFullYear());
-        const total = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+        const thisMonthExpenses = expenses.filter(e => {
+            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const d = new Date(safeDate);
+            return e.type === 'expense' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        const total = thisMonthExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
         
         const groups = {};
         thisMonthExpenses.forEach(e => {
-            groups[e.category] = (groups[e.category] || 0) + e.amount;
+            const cat = e.category || 'other';
+            groups[cat] = (groups[cat] || 0) + (Number(e.amount) || 0);
         });
 
         const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]);
@@ -903,24 +904,38 @@ export default function App() {
         });
     }, [expenses, categories]);
 
-    const expenseCategories = [
-        { id: 'shopee', name: '蝦皮', icon: 'shopee' },
-        { id: 'taobao', name: '淘寶', icon: 'taobao' },
-        { id: 'online', name: '網購', icon: 'online' },
-        { id: 'daily', name: '日常', icon: 'daily' },
-        { id: 'food', name: '餐飲', icon: 'food' },
-        { id: 'transport', name: '交通', icon: 'transport' },
-        { id: 'salary', name: '薪水', icon: 'salary' },
-        { id: 'bonus', name: '獎金', icon: 'bonus' }
-    ];
+    const dailyExpenses = useMemo(() => {
+        const groups = {};
+        expenses.forEach(e => {
+            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            if(!groups[safeDate]) groups[safeDate] = { date: safeDate, list: [], total: 0 };
+            groups[safeDate].list.push(e);
+            if(e.type === 'expense') groups[safeDate].total -= (Number(e.amount) || 0);
+        });
+        // 確保安全排序
+        Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
+    }, [expenses]);
+
+    const historyGroups = useMemo(() => {
+        const groups = {};
+        allExpenses.forEach(e => {
+            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const monthKey = safeDate.substring(0, 7); 
+            if(!groups[monthKey]) groups[monthKey] = { date: monthKey, list: [], totalIncome: 0, totalExpense: 0 };
+            groups[monthKey].list.push(e);
+            if(e.type === 'expense') groups[monthKey].totalExpense += (Number(e.amount) || 0);
+            else groups[monthKey].totalIncome += (Number(e.amount) || 0);
+        });
+        Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        return Object.values(groups).sort((a,b) => new Date(b.date + '-01') - new Date(a.date + '-01'));
+    }, [allExpenses]);
 
     if (!isConfigured) return <ConfigScreen />;
     if (loading) return <AppLoading />;
     if (!user) return <LoginView />;
 
     const currentBook = books.find(b => b.id === currentBookId);
-    
-    // UI Helpers
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': currentBook?.name || '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理' };
 
     return (
@@ -951,7 +966,7 @@ export default function App() {
                         <div className="flex justify-between items-center mb-6">
                             <div className="flex items-center gap-2">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
-                                <span className="font-bold tracking-wide text-gray-800">{currentBook?.name}</span>
+                                <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || '生活記帳'}</span>
                             </div>
                             <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                         </div>
@@ -959,9 +974,7 @@ export default function App() {
                         {/* Donut Chart Container */}
                         <div className="relative w-40 h-40 mx-auto mb-6">
                             <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90 drop-shadow-sm">
-                                {/* Background Ring */}
                                 <circle r="15.9155" cx="16" cy="16" fill="transparent" stroke="#f3f4f6" strokeWidth="4" />
-                                {/* Slices */}
                                 {pieChartData.map(slice => (
                                     <circle 
                                         key={slice.id}
@@ -975,8 +988,8 @@ export default function App() {
                             {/* Center Text (收支出) */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                 <div className="text-[10px] font-bold text-gray-400 mb-1 tracking-widest">本月收支</div>
-                                <div className="text-[11px] font-black text-emerald-500 mb-0.5">+{formatMoney(currentMonthStats.income).replace('$', '')}</div>
-                                <div className="text-[11px] font-black text-rose-500">-{formatMoney(currentMonthStats.expense).replace('$', '')}</div>
+                                <div className="text-[11px] font-black text-emerald-500 mb-0.5">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
+                                <div className="text-[11px] font-black text-rose-500">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
                             </div>
                         </div>
 
