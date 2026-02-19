@@ -663,22 +663,29 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                     throw new Error("無效的備份檔案格式");
                 }
 
-                // 強化版：安全匯入函數
+                // 強化版：安全匯入函數，避開 Firebase 的路徑解析 Bug
                 const importCollection = async (collectionName, items) => {
                     // 如果沒有該集合的資料，或格式不正確，直接跳過
                     if (!items || !Array.isArray(items)) return; 
                     
-                    const promises = items.map(item => {
+                    const colRef = collection(db, 'artifacts', appId, 'users', user.uid, collectionName);
+
+                    const promises = items.map(async (item) => {
                         // 防呆防錯：確保資料存在且擁有有效 ID，否則跳過
-                        if (!item || !item.id) return Promise.resolve(); 
+                        if (!item || !item.id) return; 
                         
                         const { id, ...payload } = item;
                         
-                        // 解決 indexOf 錯誤的核心：將路徑組合成純字串，避免 null 段落導致 Firebase 崩潰
-                        const docPath = `artifacts/${appId}/users/${user.uid}/${collectionName}/${id}`;
-                        return setDoc(doc(db, docPath), payload);
+                        try {
+                            // 關鍵修復：直接將字串 ID 傳給 doc()，避免傳入完整路徑字串導致內部 indexOf() 出錯
+                            const docRef = doc(colRef, String(id));
+                            await setDoc(docRef, payload);
+                        } catch (err) {
+                            console.warn(`寫入 ${collectionName} 的紀錄 ${id} 時發生錯誤 (已自動忽略此筆壞檔):`, err);
+                        }
                     });
                     
+                    // 等待全部寫入（因為用了 try-catch，所以即使有壞資料也不會 Reject 整批）
                     await Promise.all(promises);
                 };
 
@@ -731,6 +738,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                         <input 
                             type="file" 
                             accept=".json"
+                            onClick={(e) => { e.target.value = null; }} // 確保選同一個檔案也能觸發 onChange
                             onChange={handleImport}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             disabled={isLoading}
@@ -1381,7 +1389,7 @@ export default function App() {
                             </div>
                         ))}
                     </div>
-                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} onDelete={handleExpenseDelete} initialData={editingExpense} categories={categories} bookId={currentBookId} />}
+                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} />}
                     <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} />
                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                 </div>
