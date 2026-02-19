@@ -770,11 +770,14 @@ export default function App() {
             meta.content = content;
         });
 
+        // 取得當前網站的絕對網址 (例如 https://your-app.vercel.app/gold.png)
+        const absoluteIconUrl = window.location.origin + "/gold.png";
+
         const manifest = {
             name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
-            start_url: window.location.pathname, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
+            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
             icons: [{
-                src: "/gold.png",
+                src: absoluteIconUrl,
                 sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
             }]
         };
@@ -785,8 +788,14 @@ export default function App() {
         if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
         link.href = manifestUrl;
 
+        // 設定 iOS 專用的桌面圖示 (使用絕對路徑)
         let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (!appleIcon) { appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = "/gold.png"; document.head.appendChild(appleIcon); }
+        if (!appleIcon) { 
+            appleIcon = document.createElement('link'); 
+            appleIcon.rel = 'apple-touch-icon'; 
+            appleIcon.href = absoluteIconUrl; 
+            document.head.appendChild(appleIcon); 
+        }
 
         const userAgent = window.navigator.userAgent.toLowerCase();
         const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
