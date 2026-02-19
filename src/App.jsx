@@ -946,6 +946,12 @@ export default function App() {
 
     useEffect(() => {
         if (!isConfigured) return; 
+        
+        // 處理 Redirect 登入結果，清除可能殘留的異常狀態
+        getRedirectResult(auth).catch((error) => {
+            console.error("Redirect login error:", error);
+        });
+
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
             if(u) fetchGoldPrice();
