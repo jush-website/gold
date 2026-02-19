@@ -6,7 +6,8 @@ import {
   query, orderBy, setDoc
 } from 'firebase/firestore';
 import { 
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  getRedirectResult, signInWithRedirect // 修復白畫面：補回這兩個匯入
 } from 'firebase/auth';
 import { 
   Coins, TrendingUp, TrendingDown, RefreshCcw, Scale, 
@@ -182,20 +183,64 @@ const ConfigScreen = () => {
 const LoginView = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    
+    // 偵測是否為 LINE, FB, IG 等內建瀏覽器
+    const isInAppBrowser = /Line|FBAN|FBAV|Instagram|WeChat/i.test(navigator.userAgent);
+
     const handleGoogleLogin = async () => {
+        if (isInAppBrowser) {
+            setError('請點擊右上角或右下角選單，選擇「以 Safari / Chrome 開啟」後再登入。');
+            return;
+        }
         setLoading(true); setError('');
-        try { await signInWithPopup(auth, googleProvider); } 
-        catch (err) { setError(`登入失敗: ${err.message}`); setLoading(false); }
+        try { 
+            await signInWithPopup(auth, googleProvider); 
+        } catch (err) { 
+            console.error("Login Error:", err);
+            if (err.code === 'auth/popup-closed-by-user') {
+                setError('您取消了登入，請再試一次。');
+            } else if (err.code === 'auth/missing-initial-state' || err.message.includes('missing initial state')) {
+                setError('瀏覽器安全限制阻擋了登入。請點擊下方的「重新導向模式」登入，或將網頁加入主畫面。');
+            } else {
+                setError(`登入失敗: ${err.message}`); 
+            }
+            setLoading(false); 
+        }
     };
+
+    const handleRedirectLogin = async () => {
+        setLoading(true); setError('');
+        try {
+            await signInWithRedirect(auth, googleProvider);
+        } catch (err) {
+            setError(`導向登入失敗: ${err.message}`);
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{backgroundColor: '#111827'}}>
              <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
              <div className="relative z-10 w-full max-w-md bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 p-8 rounded-3xl shadow-2xl text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20 transform rotate-3"><Wallet size={40} className="text-white" /></div>
                 <h1 className="text-3xl font-black text-white mb-2">我的記帳本</h1><p className="text-gray-400 mb-8">黃金投資 • 生活記帳 • 財務自由</p>
+                
+                {isInAppBrowser && (
+                    <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2">
+                        <AlertCircle size={16} className="shrink-0 mt-0.5"/>
+                        <span>偵測到您使用社群軟體內建瀏覽器，這會阻擋登入。請點擊選單選擇<strong>「以 Safari / Chrome 開啟」</strong>。</span>
+                    </div>
+                )}
+
                 {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5"/><span>{error}</span></div>}
+                
                 <button onClick={handleGoogleLogin} disabled={loading} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl mb-3 flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">{loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 使用 Google 登入</button>
-                <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
+                
+                <button onClick={handleRedirectLogin} disabled={loading} className="mt-2 mb-6 text-[11px] text-gray-400 hover:text-gray-200 underline py-2 transition-colors">
+                    登入沒反應？改用「重新導向」模式登入
+                </button>
+
+                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
                 {!isEnvConfigured && <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">重設預覽 API Key</button>}
             </div>
         </div>
@@ -649,7 +694,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
         const file = e.target.files[0];
         if (!file) return;
         if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) {
-            e.target.value = ''; // 使用者取消時重置 input
+            e.target.value = ''; 
             return;
         }
         
@@ -665,19 +710,16 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
 
                 // 強化版：安全匯入函數，避開 Firebase 的路徑解析 Bug
                 const importCollection = async (collectionName, items) => {
-                    // 如果沒有該集合的資料，或格式不正確，直接跳過
                     if (!items || !Array.isArray(items)) return; 
                     
                     const colRef = collection(db, 'artifacts', appId, 'users', user.uid, collectionName);
 
                     const promises = items.map(async (item) => {
-                        // 防呆防錯：確保資料存在且擁有有效 ID，否則跳過
                         if (!item || !item.id) return; 
                         
                         const { id, ...payload } = item;
                         
                         try {
-                            // 關鍵修復：直接將字串 ID 傳給 doc()，避免傳入完整路徑字串導致內部 indexOf() 出錯
                             const docRef = doc(colRef, String(id));
                             await setDoc(docRef, payload);
                         } catch (err) {
@@ -685,19 +727,15 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                         }
                     });
                     
-                    // 等待全部寫入（因為用了 try-catch，所以即使有壞資料也不會 Reject 整批）
                     await Promise.all(promises);
                 };
 
-                // 依序匯入所有模組資料
                 await importCollection('gold_transactions', data.goldTransactions);
                 await importCollection('account_books', data.books);
                 await importCollection('expense_transactions', data.allExpenses);
                 await importCollection('expense_categories', data.categories);
 
                 alert("資料還原成功！系統將自動重新整理以套用新資料。");
-                
-                // 還原成功後強制重整頁面，確保 React 狀態與 Firebase 完全同步
                 setTimeout(() => window.location.reload(), 500); 
 
             } catch (error) {
@@ -705,7 +743,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                 alert("還原失敗：" + error.message);
             } finally {
                 setIsLoading(false);
-                e.target.value = ''; // 重置 input 讓下次可以選同一個檔案
+                e.target.value = ''; 
             }
         };
         
@@ -738,7 +776,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                         <input 
                             type="file" 
                             accept=".json"
-                            onClick={(e) => { e.target.value = null; }} // 確保選同一個檔案也能觸發 onChange
+                            onClick={(e) => { e.target.value = null; }} 
                             onChange={handleImport}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             disabled={isLoading}
@@ -846,7 +884,7 @@ export default function App() {
     const [showExpenseAdd, setShowExpenseAdd] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
     const [expenseToDelete, setExpenseToDelete] = useState(null);
-    const [goldToDelete, setGoldToDelete] = useState(null); // 新增這行：黃金刪除狀態
+    const [goldToDelete, setGoldToDelete] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
     useEffect(() => {
@@ -947,7 +985,7 @@ export default function App() {
     useEffect(() => {
         if (!isConfigured) return; 
         
-        // 處理 Redirect 登入結果，清除可能殘留的異常狀態
+        // 處理 Redirect 登入結果，清除可能殘留的異常狀態 (避免 In-App Browser 登入白畫面)
         getRedirectResult(auth).catch((error) => {
             console.error("Redirect login error:", error);
         });
@@ -1334,30 +1372,21 @@ export default function App() {
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                         {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
                          goldTransactions.map(t => (
-                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
+                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm hover:border-orange-200 cursor-pointer active:scale-95 transition-all">
+                                 <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div><div><div className="font-bold text-gray-800">{formatWeight(t.weight)}</div><div className="text-xs text-gray-400">{t.date}</div></div></div>
                                  <div className="flex items-center gap-3">
-                                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
-                                     <div>
-                                         <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
-                                         <div className="text-xs text-gray-400">{t.date}</div>
-                                     </div>
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                     <div className="text-right">
-                                         <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                         <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
-                                     </div>
-                                     <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                         <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
-                                         <button onClick={() => setGoldToDelete(t)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                     </div>
+                                    <div className="text-right"><div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div><div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div></div>
+                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                        <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                        <button onClick={() => setGoldToDelete(t)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                                    </div>
                                  </div>
                              </div>
                          ))
                         }
                     </div>
                     {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} onDelete={handleGoldDelete} initialData={editingGold} />}
-                    <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
+                    <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
                 </div>
              )}
 
@@ -1414,7 +1443,7 @@ export default function App() {
                     </div>
                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} />}
                     <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} />
-                    <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
+                    <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                 </div>
              )}
 
