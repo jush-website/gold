@@ -739,6 +739,17 @@ export default function App() {
     const [editingExpense, setEditingExpense] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
+    // --- 載入 Tailwind 樣式 (已加回) ---
+    useEffect(() => {
+        if (!document.getElementById('tailwind-script')) {
+            const script = document.createElement('script');
+            script.id = 'tailwind-script';
+            script.src = "https://cdn.tailwindcss.com";
+            script.async = true;
+            document.head.appendChild(script);
+        }
+    }, []);
+
     // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
     useEffect(() => {
         const metaTags = [
