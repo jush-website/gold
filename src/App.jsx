@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-  getRedirectResult, signInWithRedirect // 修復白畫面：補回這兩個匯入
+  getRedirectResult, signInWithRedirect
 } from 'firebase/auth';
 import { 
   Coins, TrendingUp, TrendingDown, RefreshCcw, Scale, 
@@ -78,22 +78,6 @@ const formatWeight = (grams, unit = 'tw_qian') => {
     return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) + '克';
 };
 
-const compressImage = (base64Str, maxWidth = 800, quality = 0.6) => {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = base64Str;
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let width = img.width, height = img.height;
-            if (width > maxWidth) { height = (height * maxWidth) / width; width = maxWidth; }
-            canvas.width = width; canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = () => resolve(base64Str);
-    });
-};
-
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const d = new Date(dateString);
@@ -127,10 +111,24 @@ const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v1';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
 // --- SHARED UI COMPONENTS ---
+
+// 懸浮提示小視窗 (Toast)
+const Toast = ({ message, type }) => {
+    if (!message) return null;
+    return (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] animate-[fadeIn_0.3s]">
+            <div className={`px-5 py-3 rounded-full shadow-xl flex items-center gap-2 text-sm font-bold text-white transition-all ${type === 'error' ? 'bg-red-500 shadow-red-500/30' : 'bg-gray-800 shadow-gray-800/30'}`}>
+                {type === 'error' ? <AlertCircle size={18} /> : <Check size={18} className="text-green-400" />}
+                {message}
+            </div>
+        </div>
+    );
+};
+
 const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]">
             <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
                 <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4 mx-auto">
                     <AlertCircle size={24} />
@@ -183,8 +181,6 @@ const ConfigScreen = () => {
 const LoginView = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    
-    // 偵測是否為 LINE, FB, IG 等內建瀏覽器
     const isInAppBrowser = /Line|FBAN|FBAV|Instagram|WeChat/i.test(navigator.userAgent);
 
     const handleGoogleLogin = async () => {
@@ -196,7 +192,6 @@ const LoginView = () => {
         try { 
             await signInWithPopup(auth, googleProvider); 
         } catch (err) { 
-            console.error("Login Error:", err);
             if (err.code === 'auth/popup-closed-by-user') {
                 setError('您取消了登入，請再試一次。');
             } else if (err.code === 'auth/missing-initial-state' || err.message.includes('missing initial state')) {
@@ -210,12 +205,8 @@ const LoginView = () => {
 
     const handleRedirectLogin = async () => {
         setLoading(true); setError('');
-        try {
-            await signInWithRedirect(auth, googleProvider);
-        } catch (err) {
-            setError(`導向登入失敗: ${err.message}`);
-            setLoading(false);
-        }
+        try { await signInWithRedirect(auth, googleProvider); } 
+        catch (err) { setError(`導向登入失敗: ${err.message}`); setLoading(false); }
     };
 
     return (
@@ -235,11 +226,7 @@ const LoginView = () => {
                 {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5"/><span>{error}</span></div>}
                 
                 <button onClick={handleGoogleLogin} disabled={loading} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl mb-3 flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">{loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 使用 Google 登入</button>
-                
-                <button onClick={handleRedirectLogin} disabled={loading} className="mt-2 mb-6 text-[11px] text-gray-400 hover:text-gray-200 underline py-2 transition-colors">
-                    登入沒反應？改用「重新導向」模式登入
-                </button>
-
+                <button onClick={handleRedirectLogin} disabled={loading} className="mt-2 mb-6 text-[11px] text-gray-400 hover:text-gray-200 underline py-2 transition-colors">登入沒反應？改用「重新導向」模式登入</button>
                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
                 {!isEnvConfigured && <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">重設預覽 API Key</button>}
             </div>
@@ -309,18 +296,20 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     );
 };
 
-const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
+const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [unit, setUnit] = useState(initialData?.weight ? 'g' : 'g'); 
     const [weightInput, setWeightInput] = useState(initialData?.weight ? initialData.weight.toString() : '');
     const [totalCost, setTotalCost] = useState(initialData?.totalCost?.toString() ?? '');
     const [location, setLocation] = useState(initialData?.location || '');
     const [note, setNote] = useState(initialData?.note || '');
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     
     const handleSubmit = () => {
         let w = parseFloat(weightInput);
-        if (isNaN(w) || w <= 0) return;
+        if (isNaN(w) || w <= 0) {
+            showToast("請輸入正確的重量", "error");
+            return;
+        }
         if (unit === 'tw_qian') w = w * 3.75;
         if (unit === 'tw_liang') w = w * 37.5;
         onSave({ date, weight: w, totalCost: parseFloat(totalCost) || 0, location, note });
@@ -341,11 +330,9 @@ const AddGoldModal = ({ onClose, onSave, onDelete, initialData }) => {
                     </div>
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400">總成本</label><input type="number" value={totalCost} onChange={e=>setTotalCost(e.target.value)} className="w-full bg-transparent text-2xl font-black"/></div>
                     <div className="flex gap-2"><input placeholder="地點" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 bg-gray-50 p-3 rounded-xl border-gray-100 text-sm font-bold"/><input placeholder="備註" value={note} onChange={e=>setNote(e.target.value)} className="flex-1 bg-gray-50 p-3 rounded-xl border-gray-100 text-sm font-bold"/></div>
-                    <button onClick={handleSubmit} className="w-full py-4 bg-yellow-500 text-white rounded-2xl font-bold shadow-lg shadow-yellow-200 active:scale-95 transition-transform">儲存</button>
-                    {initialData && <button onClick={()=>setShowDeleteConfirm(true)} className="w-full py-3 text-red-500 font-bold bg-red-50 hover:bg-red-100 rounded-2xl transition-colors">刪除紀錄</button>}
+                    <button onClick={handleSubmit} className="w-full py-4 bg-yellow-500 text-white rounded-2xl font-bold shadow-lg shadow-yellow-200 active:scale-95 transition-transform">儲存紀錄</button>
                 </div>
             </div>
-            <ConfirmModal isOpen={showDeleteConfirm} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => onDelete(initialData.id)} onCancel={() => setShowDeleteConfirm(false)} />
         </div>
     );
 };
@@ -440,7 +427,7 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
     );
 };
 
-const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId }) => {
+const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, showToast }) => {
     const [amount, setAmount] = useState(initialData?.amount || '');
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [type, setType] = useState(initialData?.type || 'expense');
@@ -458,8 +445,14 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId }) =
     const [showKeypad, setShowKeypad] = useState(false);
 
     const handleSubmit = () => {
-        if (!amount || parseFloat(amount) === 0) return alert("請輸入金額");
-        if (!category) return alert("請選擇分類");
+        if (!amount || parseFloat(amount) === 0) {
+            showToast("請輸入金額", "error");
+            return;
+        }
+        if (!category) {
+            showToast("請選擇分類", "error");
+            return;
+        }
         onSave({ amount: parseFloat(amount), date, category, note, type, bookId });
     };
 
@@ -494,7 +487,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId }) =
                         </div>
                     </div>
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
-                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '更新紀錄' : '確認記帳'}</button></div>)}
+                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '儲存修改' : '確認記帳'}</button></div>)}
                 </div>
              </div>
              {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
@@ -502,7 +495,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId }) =
     );
 };
 
-const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId }) => {
+const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [newBookName, setNewBookName] = useState('');
     const [editingBook, setEditingBook] = useState(null); 
@@ -511,7 +504,10 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     if (!isOpen) return null;
 
     const handleCreate = () => {
-        if(!newBookName.trim()) return;
+        if(!newBookName.trim()) {
+            showToast("請輸入帳本名稱", "error");
+            return;
+        }
         onSaveBook({ name: newBookName });
         setNewBookName('');
         setIsAdding(false);
@@ -587,7 +583,7 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     );
 };
 
-const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
+const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [editingId, setEditingId] = useState(null);
     const [name, setName] = useState('');
     const [icon, setIcon] = useState('tag');
@@ -608,7 +604,10 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
     };
 
     const handleSave = () => {
-        if (!name.trim()) return;
+        if (!name.trim()) {
+            showToast("請輸入分類名稱", "error");
+            return;
+        }
         onSave({ id: editingId, name, icon, type });
         handleAddNew();
     };
@@ -676,7 +675,7 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
 };
 
 // --- NEW BACKUP / RESTORE COMPONENT ---
-const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, user, appId, db }) => {
+const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, user, appId, db, showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
     
     const handleExport = () => {
@@ -688,6 +687,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
         a.download = `我的記帳本_備份_${new Date().toISOString().split('T')[0]}.json`; 
         a.click();
         URL.revokeObjectURL(url);
+        showToast("資料已成功匯出");
     };
 
     const handleImport = async (e) => {
@@ -735,12 +735,12 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                 await importCollection('expense_transactions', data.allExpenses);
                 await importCollection('expense_categories', data.categories);
 
-                alert("資料還原成功！系統將自動重新整理以套用新資料。");
-                setTimeout(() => window.location.reload(), 500); 
+                showToast("資料還原成功！正在重新載入...");
+                setTimeout(() => window.location.reload(), 1500); 
 
             } catch (error) {
                 console.error("還原錯誤:", error);
-                alert("還原失敗：" + error.message);
+                showToast(`還原失敗: ${error.message}`, "error");
             } finally {
                 setIsLoading(false);
                 e.target.value = ''; 
@@ -748,7 +748,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
         };
         
         reader.onerror = () => {
-            alert("讀取檔案失敗，請檢查檔案是否損毀。");
+            showToast("讀取檔案失敗，請檢查檔案是否損毀。", "error");
             setIsLoading(false);
             e.target.value = '';
         };
@@ -830,6 +830,13 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     
+    // 全域 Toast 狀態
+    const [toast, setToast] = useState({ message: '', type: 'success' });
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
+    };
+
     // 全域歷史導覽堆疊
     const [historyStack, setHistoryStack] = useState(['home']);
     const currentView = historyStack[historyStack.length - 1];
@@ -919,19 +926,13 @@ export default function App() {
 
         const absoluteIconUrl = window.location.origin + "/gold.png";
 
-        // 嚴格符合 Chrome PWA 原生彈窗標準的設定
         const manifest = {
-            name: "我的記帳本", 
-            short_name: "我的記帳本", 
-            description: "您的專屬黃金與記帳管理工具",
-            start_url: "/", 
-            display: "standalone", 
-            background_color: "#f9fafb", 
-            theme_color: "#f9fafb",
-            icons: [
-                { src: absoluteIconUrl, sizes: "192x192", type: "image/png", purpose: "any maskable" },
-                { src: absoluteIconUrl, sizes: "512x512", type: "image/png", purpose: "any maskable" }
-            ]
+            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
+            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
+            icons: [{
+                src: absoluteIconUrl,
+                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
+            }]
         };
         const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
         const manifestUrl = URL.createObjectURL(manifestBlob);
@@ -960,8 +961,7 @@ export default function App() {
         }
 
         const handleBeforeInstallPrompt = (e) => {
-            e.preventDefault(); // 攔截預設的小橫幅
-            console.log("PWA 原生安裝事件已就緒");
+            e.preventDefault();
             setDeferredPrompt(e);
             if (!isStandalone) setShowInstallBtn(true);
         };
@@ -976,10 +976,8 @@ export default function App() {
 
     const handleInstallClick = async () => {
         if (isIOS) {
-            // iOS 永遠只能靠分享按鈕，彈出教學視窗
             setShowIOSPrompt(true);
         } else if (deferredPrompt) {
-            // Android: 觸發真正的系統原生安裝視窗！
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') {
@@ -987,7 +985,6 @@ export default function App() {
                 setShowInstallBtn(false);
             }
         } else {
-            // 如果事件未觸發 (例如在 iframe 預覽中)，跳出教學備案
             setShowAndroidPrompt(true);
         }
     };
@@ -995,7 +992,6 @@ export default function App() {
     useEffect(() => {
         if (!isConfigured) return; 
         
-        // 處理 Redirect 登入結果，清除可能殘留的異常狀態 (避免 In-App Browser 登入白畫面)
         getRedirectResult(auth).catch((error) => {
             console.error("Redirect login error:", error);
         });
@@ -1051,7 +1047,7 @@ export default function App() {
         return () => unsub();
     }, [user, isConfigured]);
 
-    // 所有跟隨特定帳本的資料 (供首頁、記帳、歷史共用)
+    // 所有跟隨特定帳本的資料
     const expenses = useMemo(() => {
         if (!currentBookId) return [];
         return allExpenses.filter(e => e.bookId === currentBookId);
@@ -1087,38 +1083,75 @@ export default function App() {
     const handleGoldSave = async (data) => {
         try {
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
-            if (editingGold) await updateDoc(doc(ref, editingGold.id), { ...data, updatedAt: serverTimestamp() });
-            else await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+            if (editingGold) {
+                await updateDoc(doc(ref, editingGold.id), { ...data, updatedAt: serverTimestamp() });
+                showToast("修改黃金紀錄成功");
+            } else {
+                await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+                showToast("新增黃金紀錄成功");
+            }
             setShowGoldAdd(false); setEditingGold(null);
-        } catch (e) { alert("儲存失敗: " + e.message); }
+        } catch (e) { showToast(`儲存失敗: ${e.message}`, "error"); }
     };
-    const handleGoldDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id)); setShowGoldAdd(false); };
+
+    const handleGoldDelete = async (id) => { 
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id)); 
+            setShowGoldAdd(false);
+            showToast("已刪除黃金紀錄");
+        } catch (e) {
+            showToast(`刪除失敗: ${e.message}`, "error");
+        }
+    };
 
     const handleBookSave = async (data) => {
         try {
-            if (data.id) await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', data.id), { name: data.name, updatedAt: serverTimestamp() });
-            else await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
-        } catch (e) { alert("儲存帳本失敗: " + e.message); }
+            if (data.id) {
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', data.id), { name: data.name, updatedAt: serverTimestamp() });
+                showToast("帳本名稱已更新");
+            } else {
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
+                showToast("新增帳本成功");
+            }
+        } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
     };
+
     const handleBookDelete = async (id) => {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', id));
-        if(currentBookId === id) {
-            const remainingBooks = books.filter(b => b.id !== id);
-            setCurrentBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', id));
+            showToast("已刪除帳本");
+            if(currentBookId === id) {
+                const remainingBooks = books.filter(b => b.id !== id);
+                setCurrentBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+            }
+        } catch (e) {
+            showToast(`刪除帳本失敗: ${e.message}`, "error");
         }
     };
 
     const handleExpenseSave = async (data) => {
-        if (!data.bookId) return alert("未選擇帳本");
+        if (!data.bookId) return showToast("未選擇帳本", "error");
         try {
             const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions');
-            if (editingExpense) await updateDoc(doc(ref, editingExpense.id), { ...data, updatedAt: serverTimestamp() });
-            else await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+            if (editingExpense) {
+                await updateDoc(doc(ref, editingExpense.id), { ...data, updatedAt: serverTimestamp() });
+                showToast("修改記帳紀錄成功");
+            } else {
+                await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+                showToast("新增記帳成功");
+            }
             setShowExpenseAdd(false); setEditingExpense(null);
-        } catch (e) { alert("儲存紀錄失敗: " + e.message); }
+        } catch (e) { showToast(`儲存紀錄失敗: ${e.message}`, "error"); }
     };
+
     const handleExpenseDelete = async (id) => {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', id));
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', id));
+            setShowExpenseAdd(false);
+            showToast("已刪除記帳紀錄");
+        } catch (e) {
+            showToast(`刪除失敗: ${e.message}`, "error");
+        }
     };
 
     const handleCategorySave = async (data) => {
@@ -1127,10 +1160,22 @@ export default function App() {
             if (data.id) {
                 const { id, ...payload } = data;
                 await updateDoc(doc(ref, id), { ...payload, updatedAt: serverTimestamp() });
-            } else { await addDoc(ref, { ...data, createdAt: serverTimestamp() }); }
-        } catch(e) { alert("儲存分類失敗: " + e.message); }
+                showToast("分類修改成功");
+            } else { 
+                await addDoc(ref, { ...data, createdAt: serverTimestamp() }); 
+                showToast("新增分類成功");
+            }
+        } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
     };
-    const handleCategoryDelete = async (id) => { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); };
+
+    const handleCategoryDelete = async (id) => { 
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); 
+            showToast("已刪除分類");
+        } catch (e) {
+            showToast(`刪除分類失敗: ${e.message}`, "error");
+        }
+    };
 
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
@@ -1197,7 +1242,7 @@ export default function App() {
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
-    // 歷史紀錄專屬 (只過濾當前帳本)
+    // 歷史紀錄篩選
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
     
     const currentHistoryRecords = useMemo(() => {
@@ -1223,7 +1268,6 @@ export default function App() {
         const diffX = touchStartX - touchEndX;
         const diffY = Math.abs(touchStartY - touchEndY);
 
-        // 左右滑動切換月份：左滑(下一月)，右滑(上一月)
         if (Math.abs(diffX) > 50 && diffY < 50) {
             if (diffX > 0) {
                 setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
@@ -1251,6 +1295,9 @@ export default function App() {
                  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
              `}</style>
              
+             {/* 全域 Toast 提示 */}
+             <Toast message={toast.message} type={toast.type} />
+
              <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
              {/* TOP NAVIGATION BAR */}
@@ -1282,7 +1329,6 @@ export default function App() {
                             <Download size={16}/>
                         </button>
                     )}
-                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1291,10 +1337,7 @@ export default function App() {
                 </div>
              </div>
 
-             {/* Android PWA 安裝教學彈窗 */}
              {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
-
-             {/* iOS PWA 安裝教學彈窗 */}
              {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
 
              {/* === HOME DASHBOARD VIEW === */}
@@ -1382,7 +1425,7 @@ export default function App() {
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                         {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
                          goldTransactions.map(t => (
-                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm hover:border-orange-200 cursor-pointer active:scale-95 transition-all">
+                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
                                  <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div><div><div className="font-bold text-gray-800">{formatWeight(t.weight)}</div><div className="text-xs text-gray-400">{t.date}</div></div></div>
                                  <div className="flex items-center gap-3">
                                     <div className="text-right"><div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div><div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div></div>
@@ -1395,7 +1438,7 @@ export default function App() {
                          ))
                         }
                     </div>
-                    {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} onDelete={handleGoldDelete} initialData={editingGold} />}
+                    {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} initialData={editingGold} showToast={showToast} />}
                     <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
                 </div>
              )}
@@ -1414,7 +1457,7 @@ export default function App() {
                         </div>
                     </div>
                     <button onClick={() => { 
-                        if(books.length === 0) return alert('請先新增帳本');
+                        if(books.length === 0) return showToast('請先新增帳本', 'error');
                         setEditingExpense(null); 
                         setShowExpenseAdd(true); 
                     }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={20}/> 記一筆</button>
@@ -1451,8 +1494,8 @@ export default function App() {
                             </div>
                         ))}
                     </div>
-                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} />}
-                    <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} />
+                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                    <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} showToast={showToast} />
                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                 </div>
              )}
@@ -1547,7 +1590,7 @@ export default function App() {
                                           const cat = categories.find(c=>c.id===item.category);
                                           const IconComp = ICON_MAP[cat?.icon] || Tag;
                                           return (
-                                             <div key={item.id} className={`p-4 flex justify-between items-center hover:bg-gray-50 transition-colors ${i !== currentHistoryRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                             <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== currentHistoryRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
                                                  <div className="flex items-center gap-4">
                                                      <div className="text-xs font-bold text-gray-400 w-11 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
                                                          <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
@@ -1561,8 +1604,14 @@ export default function App() {
                                                         </div>
                                                      </div>
                                                  </div>
-                                                 <div className="text-right">
-                                                    <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
+                                                 <div className="flex items-center gap-3">
+                                                    <div className="text-right">
+                                                        <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                                        <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                                        <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                                                    </div>
                                                  </div>
                                              </div>
                                          )
@@ -1571,12 +1620,14 @@ export default function App() {
                              )}
                          </>
                      )}
+                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                  </div>
              )}
 
              {/* === CATEGORY MANAGER VIEW === */}
              {currentView === 'categories' && (
-                 <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} />
+                 <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
              )}
 
              {/* === BACKUP & RESTORE VIEW === */}
@@ -1589,6 +1640,7 @@ export default function App() {
                      user={user} 
                      appId={appId} 
                      db={db} 
+                     showToast={showToast}
                  />
              )}
         </div>
