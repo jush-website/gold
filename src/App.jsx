@@ -846,6 +846,7 @@ export default function App() {
     const [showExpenseAdd, setShowExpenseAdd] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
     const [expenseToDelete, setExpenseToDelete] = useState(null);
+    const [goldToDelete, setGoldToDelete] = useState(null); // 新增這行：黃金刪除狀態
     const [showBookManager, setShowBookManager] = useState(false);
 
     useEffect(() => {
@@ -1327,14 +1328,30 @@ export default function App() {
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                         {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
                          goldTransactions.map(t => (
-                             <div key={t.id} onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm hover:border-orange-200 cursor-pointer active:scale-95 transition-all">
-                                 <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div><div><div className="font-bold text-gray-800">{formatWeight(t.weight)}</div><div className="text-xs text-gray-400">{t.date}</div></div></div>
-                                 <div className="text-right"><div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div><div className={`text-[10px] font-bold mt-0.5 ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div></div>
+                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
+                                 <div className="flex items-center gap-3">
+                                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
+                                     <div>
+                                         <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
+                                         <div className="text-xs text-gray-400">{t.date}</div>
+                                     </div>
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                     <div className="text-right">
+                                         <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
+                                         <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
+                                     </div>
+                                     <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                         <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                         <button onClick={() => setGoldToDelete(t)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                                     </div>
+                                 </div>
                              </div>
                          ))
                         }
                     </div>
                     {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} onDelete={handleGoldDelete} initialData={editingGold} />}
+                    <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
                 </div>
              )}
 
