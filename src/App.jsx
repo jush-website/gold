@@ -919,13 +919,19 @@ export default function App() {
 
         const absoluteIconUrl = window.location.origin + "/gold.png";
 
+        // 嚴格符合 Chrome PWA 原生彈窗標準的設定
         const manifest = {
-            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
-            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
-            icons: [{
-                src: absoluteIconUrl,
-                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
-            }]
+            name: "我的記帳本", 
+            short_name: "我的記帳本", 
+            description: "您的專屬黃金與記帳管理工具",
+            start_url: "/", 
+            display: "standalone", 
+            background_color: "#f9fafb", 
+            theme_color: "#f9fafb",
+            icons: [
+                { src: absoluteIconUrl, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+                { src: absoluteIconUrl, sizes: "512x512", type: "image/png", purpose: "any maskable" }
+            ]
         };
         const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
         const manifestUrl = URL.createObjectURL(manifestBlob);
@@ -954,7 +960,8 @@ export default function App() {
         }
 
         const handleBeforeInstallPrompt = (e) => {
-            e.preventDefault();
+            e.preventDefault(); // 攔截預設的小橫幅
+            console.log("PWA 原生安裝事件已就緒");
             setDeferredPrompt(e);
             if (!isStandalone) setShowInstallBtn(true);
         };
@@ -969,8 +976,10 @@ export default function App() {
 
     const handleInstallClick = async () => {
         if (isIOS) {
+            // iOS 永遠只能靠分享按鈕，彈出教學視窗
             setShowIOSPrompt(true);
         } else if (deferredPrompt) {
+            // Android: 觸發真正的系統原生安裝視窗！
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') {
@@ -978,6 +987,7 @@ export default function App() {
                 setShowInstallBtn(false);
             }
         } else {
+            // 如果事件未觸發 (例如在 iframe 預覽中)，跳出教學備案
             setShowAndroidPrompt(true);
         }
     };
