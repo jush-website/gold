@@ -379,25 +379,53 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
 const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
     const [expression, setExpression] = useState(initialValue ? initialValue.toString() : '');
     const [display, setDisplay] = useState(initialValue ? initialValue.toString() : '0');
+    // 新增：用來判斷是否為剛開啟編輯時的「全新輸入狀態」
+    const [isNewInput, setIsNewInput] = useState(!!initialValue);
 
     const handlePress = (key) => {
-        if (key === 'AC') { setExpression(''); setDisplay('0'); } 
-        else if (key === 'DEL') { const newExp = expression.slice(0, -1); setExpression(newExp); setDisplay(newExp || '0'); } 
+        if (key === 'AC') { 
+            setExpression(''); 
+            setDisplay('0'); 
+            setIsNewInput(false);
+        } 
+        else if (key === 'DEL') { 
+            setIsNewInput(false);
+            const newExp = expression.slice(0, -1); 
+            setExpression(newExp); 
+            setDisplay(newExp || '0'); 
+        } 
         else if (key === '=') {
             try {
                 // eslint-disable-next-line no-new-func
                 const result = new Function('return ' + expression.replace(/[^0-9+\-*/.]/g, ''))();
                 const final = Number(result).toFixed(0); 
-                setDisplay(final); setExpression(final); onResult(final);
+                setDisplay(final); 
+                setExpression(final); 
+                onResult(final);
             } catch (e) { setDisplay('Error'); }
         } else {
             const lastChar = expression.slice(-1);
-            if (['+','-','*','/'].includes(key) && ['+','-','*','/'].includes(lastChar)) {
-                 const newExp = expression.slice(0, -1) + key;
-                 setExpression(newExp); setDisplay(newExp); return;
+            const isOperator = ['+','-','*','/'].includes(key);
+
+            if (isOperator) {
+                 setIsNewInput(false);
+                 if (['+','-','*','/'].includes(lastChar)) {
+                     const newExp = expression.slice(0, -1) + key;
+                     setExpression(newExp); setDisplay(newExp); return;
+                 }
+                 const newExp = expression + key;
+                 setExpression(newExp); setDisplay(newExp);
+            } else {
+                 // 如果是編輯狀態的第一次按數字，直接覆寫(清空)舊金額
+                 if (isNewInput) {
+                     setExpression(key);
+                     setDisplay(key);
+                     setIsNewInput(false);
+                 } else {
+                     const newExp = expression + key;
+                     setExpression(newExp); setDisplay(newExp);
+                 }
             }
-            const newExp = expression + key;
-            setExpression(newExp); setDisplay(newExp);
         }
     };
 
@@ -1425,10 +1453,20 @@ export default function App() {
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                         {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
                          goldTransactions.map(t => (
-                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
-                                 <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div><div><div className="font-bold text-gray-800">{formatWeight(t.weight)}</div><div className="text-xs text-gray-400">{t.date}</div></div></div>
+                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm hover:border-orange-200 cursor-pointer active:scale-95 transition-all">
                                  <div className="flex items-center gap-3">
-                                    <div className="text-right"><div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div><div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div></div>
+                                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
+                                     <div>
+                                         <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
+                                         {/* 新增：在日期旁邊加入該筆紀錄的購入成本 */}
+                                         <div className="text-[10px] text-gray-400 mt-0.5">{t.date} · 成本 {formatMoney(t.totalCost)}</div>
+                                     </div>
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                        <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
+                                        <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
+                                    </div>
                                     <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
                                         <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
                                         <button onClick={() => setGoldToDelete(t)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
