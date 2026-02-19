@@ -16,13 +16,15 @@ import {
   ShieldCheck, User, Store, Menu, Wallet, Book,
   ArrowRight, ArrowLeft, MoreVertical, CreditCard,
   ShoppingBag, ShoppingCart, Truck, Home, Utensils,
-  Smartphone, Plane, Gift, Divide, X as XIcon, Equal, Minus
+  Smartphone, Plane, Gift, Divide, X as XIcon, Equal, Minus, Settings, Key
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
-const firebaseConfig = {
-  // 使用環境變數讀取 API Key
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
+// --- Firebase Configuration Management ---
+const STORAGE_KEY = 'firebase_config_v1';
+
+// Default config structure
+const defaultConfig = {
+  apiKey: "", 
   authDomain: "gold-29c1b.firebaseapp.com",
   projectId: "gold-29c1b",
   storageBucket: "gold-29c1b.firebasestorage.app",
@@ -30,6 +32,33 @@ const firebaseConfig = {
   appId: "1:867971422713:web:f85ecab4f9374cdbc7c528",
   measurementId: "G-BNBRLYFBCX"
 };
+
+// Logic to determine config (Env Var -> LocalStorage -> Default)
+let firebaseConfig = { ...defaultConfig };
+let isEnvConfigured = false;
+
+try {
+    // 1. Try Environment Variable (Preferred for your local setup)
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
+        firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+        isEnvConfigured = true;
+    }
+} catch (e) {
+    console.warn("Environment variable read skipped.");
+}
+
+if (!isEnvConfigured) {
+    // 2. Fallback to Local Storage (For this preview environment)
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.apiKey) firebaseConfig = parsed;
+        }
+    } catch (e) {
+        console.error("Local config load error", e);
+    }
+}
 
 // --- Helper Functions ---
 const formatMoney = (amount, currency = 'TWD') => {
@@ -79,11 +108,20 @@ const formatDate = (dateString) => {
 };
 
 // --- Firebase Init ---
-let app;
-try { app = initializeApp(firebaseConfig); } catch (e) {}
-const auth = getAuth(app);
-const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
+let app, auth, db, googleProvider;
+const isConfigured = !!firebaseConfig.apiKey; // Check if we have a key from ANY source
+
+if (isConfigured) {
+    try { 
+        app = initializeApp(firebaseConfig); 
+        auth = getAuth(app);
+        db = getFirestore(app);
+        googleProvider = new GoogleAuthProvider();
+    } catch (e) {
+        console.error("Firebase Init Error:", e);
+        if (!isEnvConfigured) localStorage.removeItem(STORAGE_KEY);
+    }
+}
 
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v2';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
@@ -107,7 +145,68 @@ const AppLoading = () => (
   </div>
 );
 
-// 2. Login View
+// 2. Configuration Screen (Fallback for Preview Environment)
+const ConfigScreen = () => {
+    const [key, setKey] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = () => {
+        if (!key.trim()) return;
+        setSaving(true);
+        const newConfig = { ...defaultConfig, apiKey: key.trim() };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+        setTimeout(() => window.location.reload(), 500);
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 text-white">
+            <div className="w-full max-w-md bg-gray-800 p-8 rounded-3xl border border-gray-700 shadow-2xl">
+                <div className="flex items-center gap-3 mb-6 text-yellow-500">
+                    <div className="p-3 bg-yellow-500/10 rounded-xl"><Settings size={24}/></div>
+                    <h1 className="text-xl font-bold">系統設定</h1>
+                </div>
+                
+                <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+                    在您的本地環境中，系統會自動讀取 <code>.env</code> 變數。
+                    <br/><br/>
+                    但在目前的預覽環境中無法讀取環境變數，請手動輸入 Firebase API Key 以啟動系統。
+                </p>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Project ID</label>
+                        <div className="bg-gray-900/50 p-3 rounded-xl text-gray-400 font-mono text-sm border border-gray-700">
+                            {defaultConfig.projectId}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-blue-400 uppercase mb-2 block flex items-center gap-1">
+                            <Key size={12}/> Firebase API Key
+                        </label>
+                        <input 
+                            type="text" 
+                            value={key} 
+                            onChange={(e) => setKey(e.target.value)}
+                            placeholder="貼上您的 API Key" 
+                            className="w-full bg-gray-900 p-3 rounded-xl border border-gray-600 focus:border-blue-500 outline-none font-mono text-sm transition-colors"
+                        />
+                    </div>
+                </div>
+
+                <button 
+                    onClick={handleSave} 
+                    disabled={!key || saving}
+                    className="w-full mt-8 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    {saving ? <Loader2 className="animate-spin" size={20}/> : '儲存並啟動'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// 3. Login View
 const LoginView = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -149,6 +248,12 @@ const LoginView = () => {
                     <ShieldCheck size={14} />
                     <span>Google 安全驗證 • 資料加密儲存</span>
                 </div>
+
+                {!isEnvConfigured && (
+                    <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">
+                        重設預覽 API Key
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -598,6 +703,8 @@ export default function App() {
 
     // 1. Auth Listener
     useEffect(() => {
+        if (!isConfigured) return; // Skip if no config
+
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
             if(u) {
@@ -610,7 +717,7 @@ export default function App() {
 
     // 2. Data Listeners
     useEffect(() => {
-        if (!user) return;
+        if (!user || !isConfigured) return;
 
         // Gold Listener
         const goldQ = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), orderBy('date', 'desc'));
@@ -633,22 +740,79 @@ export default function App() {
 
     // Expense Listener (Dependant on currentBookId)
     useEffect(() => {
-        if (!user || !currentBookId) return;
+        if (!user || !currentBookId || !isConfigured) return;
         const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books', currentBookId, 'transactions'), orderBy('date', 'desc'));
         const unsub = onSnapshot(q, (snap) => setExpenses(snap.docs.map(d => ({id:d.id, ...d.data()}))));
         return () => unsub();
     }, [user, currentBookId]);
 
     // 3. Actions
+    // ============================================
+    // 修改：現在會優先嘗試後端 API，失敗則自動切換到前端抓取
+    // ============================================
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
-        // Mock API call simulation
-        setTimeout(() => {
-             setGoldPrice(2950);
-             setGoldHistory([{date:'10-25', price:2900}, {date:'10-26', price:2950}, {date:'10-27', price:2920}, {date:'10-28', price:2950}]);
-             setGoldIntraday([{date:'09:00', price:2940}, {date:'12:00', price:2950}]);
-             setPriceLoading(false);
-        }, 1000);
+        try {
+            // 1. 優先嘗試呼叫後端 API (正式環境/本地後端)
+            const response = await fetch('/api/gold').catch(e => { console.log('Backend API failed, trying client-side fallback...'); return null; });
+            
+            if (response && response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setGoldPrice(data.currentPrice);
+                    setGoldHistory(data.history || []);
+                    setGoldIntraday(data.intraday || []);
+                    setPriceLoading(false);
+                    return;
+                }
+            }
+
+            // 2. 如果後端沒反應 (例如在預覽環境)，嘗試前端直接抓取 Yahoo Finance (透過 CORS Proxy)
+            // 這讓您在沒有後端的情況下也能看到真實波動
+            const yahooGold = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo')).then(r => r.json());
+            const yahooTwd = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=1d')).then(r => r.json());
+
+            if (yahooGold.chart.result && yahooTwd.chart.result) {
+                const gQuote = yahooGold.chart.result[0];
+                const tQuote = yahooTwd.chart.result[0];
+                const twdRate = tQuote.meta.regularMarketPrice;
+                const currentGoldUsd = gQuote.meta.regularMarketPrice;
+                
+                // 換算: (美金金價 * 匯率) / 31.1035 (盎司轉克) * 1.002 (些微溢價)
+                const priceTwd = Math.floor((currentGoldUsd * twdRate / 31.1035) * 1.005);
+                
+                setGoldPrice(priceTwd);
+                
+                // 處理歷史數據
+                const timestamps = gQuote.timestamp;
+                const closePrices = gQuote.indicators.quote[0].close;
+                const historyData = timestamps.map((ts, i) => {
+                    if (!closePrices[i]) return null;
+                    return {
+                        date: new Date(ts * 1000).toISOString().split('T')[0],
+                        price: Math.floor((closePrices[i] * twdRate / 31.1035) * 1.005)
+                    };
+                }).filter(x => x).slice(-30); // 取最近30天
+
+                setGoldHistory(historyData);
+                setGoldIntraday([]); // 前端簡易版暫不處理 intraday
+            } else {
+                throw new Error("Client side fetch failed");
+            }
+
+        } catch (e) { 
+            console.error("All fetch methods failed:", e); 
+            useFallbackData();
+        } finally { 
+            setPriceLoading(false); 
+        }
+    };
+
+    const useFallbackData = () => {
+        // Fallback mock data if API fails (e.g. in preview environment)
+        setGoldPrice(2950);
+        setGoldHistory([{date:'2023-10-25', price:2900}, {date:'2023-10-26', price:2950}, {date:'2023-10-27', price:2920}, {date:'2023-10-28', price:2950}]);
+        setGoldIntraday([{date:'09:00', price:2940}, {date:'12:00', price:2950}]);
     };
 
     const handleGoldSave = async (data) => {
@@ -727,6 +891,7 @@ export default function App() {
         { id: 'bonus', name: '獎金', icon: 'bonus' }
     ];
 
+    if (!isConfigured) return <ConfigScreen />;
     if (loading) return <AppLoading />;
     if (!user) return <LoginView />;
 
