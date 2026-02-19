@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy, where, getDocs
+  query, orderBy, setDoc
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
@@ -19,8 +19,8 @@ import {
   Smartphone, Plane, Gift, Divide, Equal, Minus, Settings, Key,
   History, Edit2, Bus, Car, Train, Music, Film, Dumbbell, 
   Heart, Zap, Scissors, Briefcase, LayoutGrid, Check,
-  ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share, 
-  ListFilter
+  ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share,
+  Database, UploadCloud, DownloadCloud
 } from 'lucide-react';
 
 // --- Icon Mapping for Categories ---
@@ -138,7 +138,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
                 <p className="text-center text-gray-500 mb-6 text-sm">{message}</p>
                 <div className="flex gap-3">
                     <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">取消</button>
-                    <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-colors">確定刪除</button>
+                    <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-colors">確定</button>
                 </div>
             </div>
         </div>
@@ -395,7 +395,7 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
     );
 };
 
-const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, bookId }) => {
+const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId }) => {
     const [amount, setAmount] = useState(initialData?.amount || '');
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [type, setType] = useState(initialData?.type || 'expense');
@@ -411,7 +411,6 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
 
     const [note, setNote] = useState(initialData?.note || '');
     const [showKeypad, setShowKeypad] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const handleSubmit = () => {
         if (!amount || parseFloat(amount) === 0) return alert("請輸入金額");
@@ -450,11 +449,10 @@ const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, b
                         </div>
                     </div>
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
-                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '更新紀錄' : '確認記帳'}</button>{initialData && <button onClick={()=>setShowDeleteConfirm(true)} className="w-full py-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-2xl font-bold transition-colors">刪除紀錄</button>}</div>)}
+                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '更新紀錄' : '確認記帳'}</button></div>)}
                 </div>
              </div>
              {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
-             <ConfirmModal isOpen={showDeleteConfirm} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => onDelete(initialData.id)} onCancel={() => setShowDeleteConfirm(false)} />
         </div>
     );
 };
@@ -489,6 +487,7 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
                 </div>
 
                 <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2">
+                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
                     {books.map(book => {
                         const isCurrent = book.id === currentBookId;
                         const isEditingThis = editingBook?.id === book.id;
@@ -513,9 +512,9 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
                                         {isCurrent && <span className="text-[10px] text-blue-500 font-bold bg-blue-100 px-2 py-0.5 rounded-full">目前使用中</span>}
                                     </div>
                                 </div>
-                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1 transition-opacity">
                                     <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-blue-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
-                                    {!isCurrent && (<button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>)}
+                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
                                 </div>
                             </div>
                         );
@@ -617,7 +616,7 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
                                     </div>
                                     <span className="font-bold text-sm text-gray-700">{cat.name}</span>
                                 </div>
-                                <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex flex-col gap-1 transition-opacity">
                                     <button onClick={()=>handleEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-500 bg-white rounded shadow-sm"><Edit2 size={12}/></button>
                                     <button onClick={()=>setShowDeleteConfirm(cat)} className="p-1.5 text-gray-400 hover:text-red-500 bg-white rounded shadow-sm"><Trash2 size={12}/></button>
                                 </div>
@@ -627,6 +626,93 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete }) => {
                 </div>
             </div>
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
+        </div>
+    );
+};
+
+// --- NEW BACKUP / RESTORE COMPONENT ---
+const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, user, appId, db }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    
+    const handleExport = () => {
+        const data = { goldTransactions, books, allExpenses, categories };
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); 
+        a.href = url; 
+        a.download = `我的記帳本_備份_${new Date().toISOString().split('T')[0]}.json`; 
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) return;
+        
+        setIsLoading(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!data.books || !data.allExpenses) throw new Error("無效的備份檔案格式");
+
+                // Sequentially set documents to restore them with original IDs
+                const importCollection = async (collectionName, items) => {
+                    const promises = items.map(item => {
+                        const { id, ...payload } = item;
+                        return setDoc(doc(db, 'artifacts', appId, 'users', user.uid, collectionName, id), payload);
+                    });
+                    await Promise.all(promises);
+                };
+
+                if (data.goldTransactions) await importCollection('gold_transactions', data.goldTransactions);
+                if (data.books) await importCollection('account_books', data.books);
+                if (data.allExpenses) await importCollection('expense_transactions', data.allExpenses);
+                if (data.categories) await importCollection('expense_categories', data.categories);
+
+                alert("資料還原成功！");
+            } catch (error) {
+                console.error(error);
+                alert("還原失敗：" + error.message);
+            } finally {
+                setIsLoading(false);
+                e.target.value = ''; 
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    return (
+        <div className="p-4 space-y-6 animate-[fadeIn_0.3s]">
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center mb-4">
+                    <Database size={24} />
+                </div>
+                <h2 className="text-xl font-black text-gray-800 mb-2">備份與還原</h2>
+                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                    您可以將所有的記帳、黃金存摺、帳本與分類資料匯出為一個檔案保存在手機或電腦中，以便更換設備或需要時進行還原。
+                </p>
+
+                <div className="space-y-4">
+                    <button onClick={handleExport} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-md shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <DownloadCloud size={20} /> 匯出資料 (備份下載)
+                    </button>
+
+                    <div className="relative">
+                        <input 
+                            type="file" 
+                            accept=".json"
+                            onChange={handleImport}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            disabled={isLoading}
+                        />
+                        <button disabled={isLoading} className="w-full py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><UploadCloud size={20} /> 匯入資料 (選擇檔案還原)</>}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -653,6 +739,7 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
                     <div className="space-y-2">
                         <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
                         <button onClick={() => { navigateTo('categories'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'categories' ? 'bg-pink-500/20 text-pink-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Tag size={20} /> <span className="font-bold">分類管理</span></button>
+                        <button onClick={() => { navigateTo('backup'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'backup' ? 'bg-indigo-500/20 text-indigo-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Database size={20} /> <span className="font-bold">備份與還原</span></button>
                     </div>
                 </div>
                 <div className="p-6 border-t border-white/5">
@@ -660,50 +747,6 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
                 </div>
             </div>
         </>
-    );
-};
-
-// --- PWA ANDROID INSTALL PROMPT ---
-const AndroidInstallPrompt = ({ onClose }) => {
-    return (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out] mb-4" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-5">
-                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                        <div className="bg-green-50 p-2 rounded-xl text-green-500"><Download size={20}/></div> 安裝到手機
-                    </h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"><X size={18}/></button>
-                </div>
-                <div className="text-sm text-gray-600 space-y-4 font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <p className="flex items-center gap-2">1. 點擊瀏覽器右上角的 <MoreVertical size={18} className="text-gray-500"/> (選單)</p>
-                    <p className="flex items-center gap-2">2. 找到並點擊 <span className="bg-white border border-gray-200 px-2 py-1 rounded-lg text-xs shadow-sm flex items-center gap-1">加到主畫面 <Plus size={12}/></span></p>
-                    <p className="flex items-center gap-2">3. 點擊「新增」即可完成安裝！</p>
-                </div>
-                <button onClick={onClose} className="w-full mt-6 py-3.5 bg-green-600 text-white rounded-xl font-bold shadow-md shadow-green-200 active:scale-95 transition-transform">我知道了</button>
-            </div>
-        </div>
-    );
-};
-
-// --- PWA iOS INSTALL PROMPT ---
-const IOSInstallPrompt = ({ onClose }) => {
-    return (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out] mb-4" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-5">
-                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                        <div className="bg-blue-50 p-2 rounded-xl text-blue-500"><Download size={20}/></div> 安裝到手機
-                    </h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"><X size={18}/></button>
-                </div>
-                <div className="text-sm text-gray-600 space-y-4 font-bold bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <p className="flex items-center gap-2">1. 點擊下方導覽列的 <Share size={18} className="text-blue-500"/></p>
-                    <p className="flex items-center gap-2">2. 往下滑動並選擇 <span className="bg-white border border-gray-200 px-2 py-1 rounded-lg text-xs shadow-sm flex items-center gap-1">加入主畫面 <Plus size={12}/></span></p>
-                    <p className="flex items-center gap-2">3. 點擊右上角的「新增」即可！</p>
-                </div>
-                <button onClick={onClose} className="w-full mt-6 py-3.5 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 active:scale-95 transition-transform">我知道了</button>
-            </div>
-        </div>
     );
 };
 
@@ -766,6 +809,7 @@ export default function App() {
     // UI State
     const [showExpenseAdd, setShowExpenseAdd] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
+    const [expenseToDelete, setExpenseToDelete] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
     useEffect(() => {
@@ -859,7 +903,6 @@ export default function App() {
                 setShowInstallBtn(false);
             }
         } else {
-            // 如果無法彈出原生視窗，顯示自訂的 Android 教學彈窗
             setShowAndroidPrompt(true);
         }
     };
@@ -886,9 +929,8 @@ export default function App() {
             setBooks(b);
             if (b.length > 0) {
                 if (!currentBookId || !b.find(book => book.id === currentBookId)) setCurrentBookId(b[0].id);
-            }
-            if (b.length === 0) {
-                 addDoc(booksRef, { name: '日常帳本', createdAt: serverTimestamp() }).catch(e => console.error(e));
+            } else if (currentBookId) {
+                setCurrentBookId(null);
             }
         });
 
@@ -918,6 +960,7 @@ export default function App() {
         return () => unsub();
     }, [user, isConfigured]);
 
+    // 所有跟隨特定帳本的資料 (供首頁、記帳、歷史共用)
     const expenses = useMemo(() => {
         if (!currentBookId) return [];
         return allExpenses.filter(e => e.bookId === currentBookId);
@@ -967,9 +1010,11 @@ export default function App() {
         } catch (e) { alert("儲存帳本失敗: " + e.message); }
     };
     const handleBookDelete = async (id) => {
-        if(books.length <= 1) return alert("至少需保留一個帳本");
         await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', id));
-        if(currentBookId === id) setCurrentBookId(books.find(b=>b.id!==id)?.id);
+        if(currentBookId === id) {
+            const remainingBooks = books.filter(b => b.id !== id);
+            setCurrentBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+        }
     };
 
     const handleExpenseSave = async (data) => {
@@ -983,7 +1028,6 @@ export default function App() {
     };
     const handleExpenseDelete = async (id) => {
         await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', id));
-        setShowExpenseAdd(false);
     };
 
     const handleCategorySave = async (data) => {
@@ -1062,15 +1106,15 @@ export default function App() {
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
-    // 歷史紀錄篩選
+    // 歷史紀錄專屬 (只過濾當前帳本)
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
     
     const currentHistoryRecords = useMemo(() => {
-        return allExpenses.filter(e => {
+        return expenses.filter(e => {
             const safeDate = e.date || new Date().toISOString().split('T')[0];
             return safeDate.startsWith(historyCurrentMonthKey);
         }).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [allExpenses, historyCurrentMonthKey]);
+    }, [expenses, historyCurrentMonthKey]);
 
     const historyTotalIncome = currentHistoryRecords.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
     const historyTotalExpense = currentHistoryRecords.filter(e => e.type === 'expense').reduce((a,b) => a + (Number(b.amount) || 0), 0);
@@ -1088,14 +1132,12 @@ export default function App() {
         const diffX = touchStartX - touchEndX;
         const diffY = Math.abs(touchStartY - touchEndY);
 
-        // 水平滑動判斷
+        // 左右滑動切換月份：左滑(下一月)，右滑(上一月)
         if (Math.abs(diffX) > 50 && diffY < 50) {
             if (diffX > 0) {
-                // 手指向左滑 -> 看更舊的月份 (-1)
-                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-            } else if (diffX < 0) {
-                // 手指向右滑 -> 看更新的月份 (+1)
                 setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+            } else if (diffX < 0) {
+                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
             }
         }
         setTouchStartX(null);
@@ -1107,13 +1149,10 @@ export default function App() {
     if (!user) return <LoginView />;
 
     const currentBook = books.find(b => b.id === currentBookId);
-    const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': currentBook?.name || '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理' };
+    const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理', 'backup':'備份與還原' };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans">
-             {/* overscroll-behavior-x: none 防止 Android 左右滑動關閉網頁
-                 touch-action: pan-y 防止 iOS Safari 水平滑動上一頁 
-             */}
+        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
              <style>{`
                  html, body { overscroll-behavior-x: none; touch-action: pan-y; }
                  .hide-scrollbar::-webkit-scrollbar { display: none; } 
@@ -1132,9 +1171,14 @@ export default function App() {
                 </div>
                 
                 <div className="font-black text-lg text-gray-800 flex justify-center items-center gap-2 flex-1">
-                    {currentView === 'expense' ? (
-                        <div onClick={() => setShowBookManager(true)} className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 px-3 py-1.5 rounded-xl transition-colors border border-transparent hover:border-gray-200">
-                            <Wallet size={18} className="text-blue-500"/><span className="max-w-[120px] truncate">{viewTitles[currentView]}</span><ChevronDown size={16} className="text-gray-400"/>
+                    {['expense', 'history'].includes(currentView) ? (
+                        <div onClick={() => setShowBookManager(true)} className="flex flex-col items-center cursor-pointer hover:bg-gray-50 px-3 py-1 rounded-xl transition-colors border border-transparent hover:border-gray-200">
+                            <div className="flex items-center gap-1.5">
+                                <Wallet size={16} className={currentView === 'history' ? 'text-purple-500' : 'text-blue-500'}/>
+                                <span className="max-w-[120px] truncate text-base leading-none">{viewTitles[currentView]}</span>
+                                <ChevronDown size={14} className="text-gray-400"/>
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-bold mt-1 tracking-wider">{currentBook?.name || '請選擇帳本'}</div>
                         </div>
                     ) : (
                         <span>{viewTitles[currentView]}</span>
@@ -1147,6 +1191,7 @@ export default function App() {
                             <Download size={16}/>
                         </button>
                     )}
+                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1168,7 +1213,7 @@ export default function App() {
                         <div className="flex justify-between items-center mb-6 relative z-10">
                             <div className="flex items-center gap-2">
                                 <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
-                                <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || '生活記帳'}</span>
+                                <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || (books.length === 0 ? '目前無帳本' : '生活記帳')}</span>
                             </div>
                             <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                         </div>
@@ -1270,7 +1315,11 @@ export default function App() {
                             <div className="bg-rose-50 p-4 rounded-3xl border border-rose-100/50"><div className="flex items-center gap-1 text-rose-500 text-xs font-bold mb-1">支出 <ArrowRight size={14}/></div><div className="font-black text-gray-800 text-xl">{formatMoney(currentMonthStats.expense)}</div></div>
                         </div>
                     </div>
-                    <button onClick={() => { setEditingExpense(null); setShowExpenseAdd(true); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={20}/> 記一筆</button>
+                    <button onClick={() => { 
+                        if(books.length === 0) return alert('請先新增帳本');
+                        setEditingExpense(null); 
+                        setShowExpenseAdd(true); 
+                    }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={20}/> 記一筆</button>
                     
                     <div className="space-y-6 pb-10 mt-2">
                         {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
@@ -1281,14 +1330,22 @@ export default function App() {
                                         const cat = categories.find(c=>c.id===item.category);
                                         const IconComp = ICON_MAP[cat?.icon] || Tag;
                                         return (
-                                            <div key={item.id} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className={`p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                            <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
                                                         <IconComp size={20}/>
                                                     </div>
                                                     <div><div className="font-black text-gray-800 text-base">{cat?.name || '其他'}</div><div className="text-xs text-gray-400 max-w-[150px] truncate mt-0.5">{item.note || '無備註'}</div></div>
                                                 </div>
-                                                <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':''}{formatMoney(item.amount)}</div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`font-black text-lg text-right ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
+                                                        {item.type==='income'?'+':''}{formatMoney(item.amount)}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                                        <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                                        <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1298,10 +1355,11 @@ export default function App() {
                     </div>
                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} onDelete={handleExpenseDelete} initialData={editingExpense} categories={categories} bookId={currentBookId} />}
                     <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} />
+                    <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                 </div>
              )}
 
-             {/* === HISTORY VIEW (Swipeable) === */}
+             {/* === HISTORY VIEW (Swipeable & Tabs) === */}
              {currentView === 'history' && (
                  <div 
                      className="p-4 space-y-5 animate-[fadeIn_0.3s]"
@@ -1407,7 +1465,6 @@ export default function App() {
                                                  </div>
                                                  <div className="text-right">
                                                     <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                    <div className="text-[9px] font-bold text-gray-500 bg-gray-100 inline-block px-2 py-0.5 rounded-md mt-1 border border-gray-200">{books.find(b=>b.id===item.bookId)?.name}</div>
                                                  </div>
                                              </div>
                                          )
@@ -1422,6 +1479,19 @@ export default function App() {
              {/* === CATEGORY MANAGER VIEW === */}
              {currentView === 'categories' && (
                  <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} />
+             )}
+
+             {/* === BACKUP & RESTORE VIEW === */}
+             {currentView === 'backup' && (
+                 <BackupRestoreView 
+                     goldTransactions={goldTransactions} 
+                     books={books} 
+                     allExpenses={allExpenses} 
+                     categories={categories} 
+                     user={user} 
+                     appId={appId} 
+                     db={db} 
+                 />
              )}
         </div>
     );
