@@ -514,7 +514,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                         </div>
                     </div>
                     {/* 新增：明細名稱輸入框 */}
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">明細名稱</label><input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="例如：拿鐵、衛生紙..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">明細名稱</label><input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="填入明細" className="bg-transparent w-full text-sm font-bold outline-none"/></div>
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
                     {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '儲存修改' : '確認記帳'}</button></div>)}
                 </div>
