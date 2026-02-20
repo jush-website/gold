@@ -888,14 +888,21 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
     );
 };
 
-// --- 全新設計的長按拖曳排序模組 (無跳動版) ---
+// --- 全新設計的長按拖曳排序模組 (無跳動版 + 卡片化設計) ---
 const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete }) => {
     const [draggingId, setDraggingId] = useState(null);
     const [currentList, setCurrentList] = useState(list);
     const startY = useRef(0);
     const pressTimer = useRef(null);
+    const containerRef = useRef(null);
+    const autoScrollRef = useRef(null);
+    const lastTouch = useRef({ x: 0, y: 0 });
+    const draggingIdRef = useRef(null);
 
-    // 拖曳狀態未啟動時，確保畫面與資料庫同步
+    // 同步最新的拖曳 ID 給 Interval 使用
+    useEffect(() => { draggingIdRef.current = draggingId; }, [draggingId]);
+
+    // 拖曳狀態未啟動時，確保畫面與外部資料庫同步
     useEffect(() => {
         if (!draggingId) setCurrentList(list);
     }, [list, draggingId]);
@@ -914,6 +921,39 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
             window.removeEventListener('touchmove', preventScroll);
         };
     }, [draggingId]);
+
+    const stopAutoScroll = () => {
+        if (autoScrollRef.current) {
+            clearInterval(autoScrollRef.current);
+            autoScrollRef.current = null;
+        }
+    };
+
+    // 背景檢查：手指底下是否碰到了其他卡片
+    const checkSwap = (clientX, clientY) => {
+        const dragId = draggingIdRef.current;
+        if (!dragId) return;
+        const elem = document.elementFromPoint(clientX, clientY);
+        const dropItem = elem?.closest('.sortable-item');
+
+        if (dropItem) {
+            const targetId = dropItem.getAttribute('data-id');
+            // 只有碰到「不同」的項目時才推擠交換，徹底杜絕無限跳動 Bug
+            if (targetId && targetId !== dragId) {
+                setCurrentList(prev => {
+                    const dragIdx = prev.findIndex(i => i.id === dragId);
+                    const targetIdx = prev.findIndex(i => i.id === targetId);
+                    if (dragIdx !== -1 && targetIdx !== -1 && dragIdx !== targetIdx) {
+                        const newArr = [...prev];
+                        const [moved] = newArr.splice(dragIdx, 1);
+                        newArr.splice(targetIdx, 0, moved);
+                        return newArr;
+                    }
+                    return prev;
+                });
+            }
+        }
+    };
 
     const handlePointerStart = (e, item) => {
         const y = e.touches ? e.touches[0].clientY : e.clientY;
@@ -934,35 +974,48 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const elem = document.elementFromPoint(clientX, clientY);
-        const dropItem = elem?.closest('.sortable-item');
+        lastTouch.current = { x: clientX, y: clientY };
 
-        if (dropItem) {
-            const targetId = dropItem.getAttribute('data-id');
-            // 只有當碰觸到「不同」的項目時，才在背景更新陣列排序 (這徹底解決了無限跳動的 Bug)
-            if (targetId && targetId !== draggingId) {
-                setCurrentList(prev => {
-                    const dragIdx = prev.findIndex(i => i.id === draggingId);
-                    const targetIdx = prev.findIndex(i => i.id === targetId);
-                    if (dragIdx !== -1 && targetIdx !== -1) {
-                        const newArr = [...prev];
-                        const [moved] = newArr.splice(dragIdx, 1);
-                        newArr.splice(targetIdx, 0, moved);
-                        return newArr;
-                    }
-                    return prev;
-                });
+        checkSwap(clientX, clientY);
+
+        // 邊緣自動滾動邏輯引擎
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const threshold = 80; // 邊緣感應區 80px
+
+            if (clientY < rect.top + threshold) {
+                if (!autoScrollRef.current) {
+                    autoScrollRef.current = setInterval(() => {
+                        if (containerRef.current) {
+                            containerRef.current.scrollTop -= 10;
+                            // 滾動時持續偵測手指底下的新卡片
+                            checkSwap(lastTouch.current.x, lastTouch.current.y);
+                        }
+                    }, 16);
+                }
+            } else if (clientY > rect.bottom - threshold) {
+                if (!autoScrollRef.current) {
+                    autoScrollRef.current = setInterval(() => {
+                        if (containerRef.current) {
+                            containerRef.current.scrollTop += 10;
+                            checkSwap(lastTouch.current.x, lastTouch.current.y);
+                        }
+                    }, 16);
+                }
+            } else {
+                stopAutoScroll();
             }
         }
     };
 
     const handlePointerEnd = () => {
         clearTimeout(pressTimer.current);
+        stopAutoScroll();
         if (draggingId) {
             const originalIndex = list.findIndex(i => i.id === draggingId);
             const newIndex = currentList.findIndex(i => i.id === draggingId);
 
-            // 如果放開手指時，位置真的改變了，我們就把這兩筆紀錄的時間戳「互換」
+            // 如果放開手指時位置真的改變了，就互換兩筆紀錄的 Firebase 時間戳
             if (originalIndex !== -1 && newIndex !== -1 && originalIndex !== newIndex) {
                 const item1 = list[originalIndex];
                 const item2 = list[newIndex];
@@ -974,14 +1027,15 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
 
     return (
         <div 
-            className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden transition-colors relative"
+            ref={containerRef}
+            className="max-h-[60vh] overflow-y-auto hide-scrollbar space-y-3 px-1 py-2 relative"
             onTouchMove={handlePointerMove}
             onTouchEnd={handlePointerEnd}
             onMouseMove={handlePointerMove}
             onMouseUp={handlePointerEnd}
             onMouseLeave={handlePointerEnd}
         >
-            {currentList.map((item, i) => {
+            {currentList.map((item) => {
                 const cat = categories.find(c=>c.id===item.category);
                 const IconComp = ICON_MAP[cat?.icon] || Tag;
                 const isDraggingThis = item.id === draggingId;
@@ -990,33 +1044,35 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                     <div 
                         key={item.id} 
                         data-id={item.id}
-                        className={`sortable-item p-4 flex justify-between items-center transition-all duration-300 
-                            ${i !== currentList.length-1 ? 'border-b border-gray-50' : ''} 
-                            ${isDraggingThis ? 'scale-[1.03] bg-orange-50/90 shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-20 relative ring-2 ring-orange-400' : 'bg-white z-0 relative'}
+                        className={`sortable-item h-[88px] p-4 flex justify-between items-center rounded-2xl border transition-all duration-300 
+                            ${isDraggingThis ? 'scale-[1.03] bg-orange-50/90 shadow-[0_15px_35px_rgba(0,0,0,0.15)] z-20 relative ring-2 ring-orange-400 border-orange-300' : 'bg-white shadow-sm z-0 relative border-gray-100 hover:border-blue-100 hover:shadow-md'}
                         `}
                         onTouchStart={(e) => handlePointerStart(e, item)}
                         onMouseDown={(e) => handlePointerStart(e, item)}
                         style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: draggingId ? 'none' : 'auto' }}
                     >
-                        <div className="flex items-center gap-4 pointer-events-none">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
+                        {/* 左側：圖示與名稱區塊 (確保不會被壓縮到變形) */}
+                        <div className="flex items-center gap-4 pointer-events-none flex-1 min-w-0">
+                            <div className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
                                 <IconComp size={20}/>
                             </div>
-                            <div>
-                                <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
-                                <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
-                                    <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
+                            <div className="flex flex-col justify-center flex-1 min-w-0">
+                                <div className="font-black text-gray-800 text-base truncate">{item.itemName || cat?.name || '其他'}</div>
+                                <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
+                                    <span className="truncate">{item.note || '無備註'}</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+
+                        {/* 右側：金額與操作按鈕區塊 */}
+                        <div className="flex items-center gap-4 shrink-0 pl-2">
                             <div className={`font-black text-lg text-right pointer-events-none ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
                                 {item.type==='income'?'+':''}{formatMoney(item.amount)}
                             </div>
-                            <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
-                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                            <div className="flex flex-col gap-2 border-l border-gray-100 pl-3">
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                             </div>
                         </div>
                     </div>
@@ -1757,7 +1813,7 @@ export default function App() {
                          </div>
                          
                          {selectedDayRecords.length === 0 ? (
-                             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
+                             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
                                  <Coffee size={32} className="opacity-20" />
                                  當日無收支紀錄
                              </div>
@@ -1958,29 +2014,29 @@ export default function App() {
                              )}
 
                              {historyTab === 'list' && (
-                                 <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] overflow-hidden animate-[fadeIn_0.3s]">
+                                 <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] overflow-hidden animate-[fadeIn_0.3s]">
                                      {currentHistoryRecords.map((item, i) => {
                                           const cat = categories.find(c=>c.id===item.category);
                                           const IconComp = ICON_MAP[cat?.icon] || Tag;
                                           return (
                                              <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== currentHistoryRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
-                                                 <div className="flex items-center gap-4">
-                                                     <div className="text-xs font-bold text-gray-400 w-11 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
+                                                 <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                     <div className="text-xs font-bold text-gray-400 w-11 shrink-0 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
                                                          <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
                                                          <div className="text-[8px] uppercase">Day</div>
                                                      </div>
-                                                     <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
-                                                        <div>
-                                                            <div className="font-black text-gray-800 text-sm">{item.itemName || cat?.name || '其他'}</div>
+                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-black text-gray-800 text-sm truncate">{item.itemName || cat?.name || '其他'}</div>
                                                             <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                                {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold">{cat?.name || '其他'}</span>}
-                                                                <span className="max-w-[100px] truncate">{item.note || '無備註'}</span>
+                                                                {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
+                                                                <span className="truncate">{item.note || '無備註'}</span>
                                                             </div>
                                                         </div>
                                                      </div>
                                                  </div>
-                                                 <div className="flex items-center gap-3">
+                                                 <div className="flex items-center gap-3 shrink-0 pl-2">
                                                     <div className="text-right">
                                                         <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
                                                     </div>
