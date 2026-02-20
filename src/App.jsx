@@ -622,6 +622,7 @@ const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast })
             showToast("請輸入分類名稱", "error");
             return;
         }
+        // 將舊有 id 一併傳出，以便更新 (如果是新增，initialData 會是 null)
         onSave({ id: initialData?.id, name: name.trim(), icon, type });
         onClose();
     };
@@ -1223,23 +1224,26 @@ export default function App() {
         }
     };
 
+    // 修正的 Firebase 儲存/修改 分類寫入方法
     const handleCategorySave = async (data) => {
         try {
-            const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories');
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(ref, id), { ...payload, updatedAt: serverTimestamp() });
+                // 強制套用 String(id) 作為路徑，防範 indexOf 錯誤並確保覆寫舊資料
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("分類修改成功");
             } else { 
-                await addDoc(ref, { ...data, createdAt: serverTimestamp() }); 
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...data, createdAt: serverTimestamp() }); 
                 showToast("新增分類成功");
             }
         } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
     };
 
+    // 修正的 Firebase 刪除 分類方法
     const handleCategoryDelete = async (id) => { 
         try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', id)); 
+            // 強制套用 String(id) 作為路徑
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id))); 
             showToast("已刪除分類");
         } catch (e) {
             showToast(`刪除分類失敗: ${e.message}`, "error");
