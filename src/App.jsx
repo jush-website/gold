@@ -112,7 +112,6 @@ const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
 // --- SHARED UI COMPONENTS ---
 
-// 懸浮提示小視窗 (Toast)
 const Toast = ({ message, type }) => {
     if (!message) return null;
     return (
@@ -144,7 +143,6 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     );
 };
 
-// --- SYSTEM COMPONENTS ---
 const AppLoading = () => (
   <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', color: 'white' }}>
     <div className="relative"><div className="w-16 h-16 border-4 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin"></div><div className="absolute inset-0 flex items-center justify-center"><Coins size={24} className="text-yellow-500" /></div></div>
@@ -312,7 +310,6 @@ const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
         }
         if (unit === 'tw_qian') w = w * 3.75;
         if (unit === 'tw_liang') w = w * 37.5;
-        // 修正：明確將 id 傳回，讓外層知道這是要「修改」而非「新增」
         onSave({ id: initialData?.id, date, weight: w, totalCost: parseFloat(totalCost) || 0, location, note });
     };
 
@@ -380,7 +377,6 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
 const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
     const [expression, setExpression] = useState(initialValue ? initialValue.toString() : '');
     const [display, setDisplay] = useState(initialValue ? initialValue.toString() : '0');
-    // 新增：用來判斷是否為剛開啟編輯時的「全新輸入狀態」
     const [isNewInput, setIsNewInput] = useState(!!initialValue);
 
     const handlePress = (key) => {
@@ -417,7 +413,6 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
                  const newExp = expression + key;
                  setExpression(newExp); setDisplay(newExp);
             } else {
-                 // 如果是編輯狀態的第一次按數字，直接覆寫(清空)舊金額
                  if (isNewInput) {
                      setExpression(key);
                      setDisplay(key);
@@ -482,7 +477,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
             showToast("請選擇分類", "error");
             return;
         }
-        // 修正：明確將 id 傳回，確保修改時覆寫舊資料
         onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, note, type, bookId });
     };
 
@@ -615,9 +609,22 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
 
 // --- NEW CATEGORY MODAL ---
 const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast }) => {
+    // 強制同步傳入的初始資料，避免舊的閉包狀態殘留導致新增/修改錯亂
     const [name, setName] = useState(initialData?.name || '');
     const [type, setType] = useState(initialData?.type || defaultType);
     const [icon, setIcon] = useState(initialData?.icon || (type === 'expense' ? 'shopping-bag' : 'wallet'));
+
+    useEffect(() => {
+        if (initialData) {
+            setName(initialData.name || '');
+            setType(initialData.type || defaultType);
+            setIcon(initialData.icon || (initialData.type === 'expense' ? 'shopping-bag' : 'wallet'));
+        } else {
+            setName('');
+            setType(defaultType);
+            setIcon(defaultType === 'expense' ? 'shopping-bag' : 'wallet');
+        }
+    }, [initialData, defaultType]);
 
     const handleSubmit = () => {
         if (!name.trim()) {
@@ -671,7 +678,6 @@ const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast })
     );
 };
 
-// --- REFACTORED CATEGORY MANAGER ---
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -692,13 +698,11 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
 
     return (
         <div className="p-4 space-y-4 animate-[fadeIn_0.3s]">
-            {/* 頂部 Tab 切換區 */}
             <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
                 <button onClick={() => setActiveTab('expense')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'expense' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>支出分類</button>
                 <button onClick={() => setActiveTab('income')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'income' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>收入分類</button>
             </div>
 
-            {/* 列表管理區 (固定高度與滾動機制) */}
             <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                     <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
@@ -734,19 +738,16 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
                 </div>
             </div>
 
-            {/* 固定新增按鈕 */}
             <button onClick={handleAddNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-200 active:scale-95 transition-transform">
                 <Plus size={20}/> 新增{activeTab === 'expense' ? '支出' : '收入'}分類
             </button>
 
-            {/* Modal 與提示視窗 */}
             {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
         </div>
     );
 };
 
-// --- NEW BACKUP / RESTORE COMPONENT ---
 const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, user, appId, db, showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
     
@@ -780,25 +781,18 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
                     throw new Error("無效的備份檔案格式");
                 }
 
-                // 強化版：安全匯入函數，避開 Firebase 的路徑解析 Bug
                 const importCollection = async (collectionName, items) => {
                     if (!items || !Array.isArray(items)) return; 
-                    
-                    const colRef = collection(db, 'artifacts', appId, 'users', user.uid, collectionName);
-
                     const promises = items.map(async (item) => {
                         if (!item || !item.id) return; 
-                        
                         const { id, ...payload } = item;
-                        
                         try {
-                            const docRef = doc(colRef, String(id));
+                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, collectionName, String(id));
                             await setDoc(docRef, payload);
                         } catch (err) {
-                            console.warn(`寫入 ${collectionName} 的紀錄 ${id} 時發生錯誤 (已自動忽略此筆壞檔):`, err);
+                            console.warn(`寫入 ${collectionName} 的紀錄 ${id} 時發生錯誤:`, err);
                         }
                     });
-                    
                     await Promise.all(promises);
                 };
 
@@ -1152,17 +1146,16 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
-    // 修正：強化所有的儲存與刪除邏輯，綁定絕對路徑確保操作成功
+    // --- 嚴格的 Firebase CRUD 函數 ---
     const handleGoldSave = async (data) => {
         try {
-            const colPath = `artifacts/${appId}/users/${user.uid}/gold_transactions`;
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("修改黃金紀錄成功");
             } else {
-                const { id, ...payload } = data; // 剔除 undefined 的 id
-                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增黃金紀錄成功");
             }
             setShowGoldAdd(false); setEditingGold(null);
@@ -1172,24 +1165,21 @@ export default function App() {
     const handleGoldDelete = async (id) => { 
         if (!id) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/gold_transactions/${String(id)}`)); 
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id))); 
             setShowGoldAdd(false);
             showToast("已刪除黃金紀錄");
-        } catch (e) {
-            showToast(`刪除失敗: ${e.message}`, "error");
-        }
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
     };
 
     const handleBookSave = async (data) => {
         try {
-            const colPath = `artifacts/${appId}/users/${user.uid}/account_books`;
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("帳本名稱已更新");
             } else {
                 const { id, ...payload } = data;
-                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增帳本成功");
             }
         } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
@@ -1198,28 +1188,25 @@ export default function App() {
     const handleBookDelete = async (id) => {
         if (!id) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/account_books/${String(id)}`));
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)));
             showToast("已刪除帳本");
             if(currentBookId === id) {
                 const remainingBooks = books.filter(b => b.id !== id);
                 setCurrentBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
             }
-        } catch (e) {
-            showToast(`刪除帳本失敗: ${e.message}`, "error");
-        }
+        } catch (e) { showToast(`刪除帳本失敗: ${e.message}`, "error"); }
     };
 
     const handleExpenseSave = async (data) => {
         if (!data.bookId) return showToast("未選擇帳本", "error");
         try {
-            const colPath = `artifacts/${appId}/users/${user.uid}/expense_transactions`;
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("修改記帳紀錄成功");
             } else {
                 const { id, ...payload } = data;
-                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增記帳成功");
             }
             setShowExpenseAdd(false); setEditingExpense(null);
@@ -1229,24 +1216,21 @@ export default function App() {
     const handleExpenseDelete = async (id) => {
         if (!id) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/expense_transactions/${String(id)}`));
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)));
             setShowExpenseAdd(false);
             showToast("已刪除記帳紀錄");
-        } catch (e) {
-            showToast(`刪除失敗: ${e.message}`, "error");
-        }
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
     };
 
     const handleCategorySave = async (data) => {
         try {
-            const colPath = `artifacts/${appId}/users/${user.uid}/expense_categories`;
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("分類修改成功");
             } else { 
                 const { id, ...payload } = data;
-                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() }); 
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...payload, createdAt: serverTimestamp() }); 
                 showToast("新增分類成功");
             }
         } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
@@ -1255,11 +1239,9 @@ export default function App() {
     const handleCategoryDelete = async (id) => { 
         if (!id) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/expense_categories/${String(id)}`)); 
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id))); 
             showToast("已刪除分類");
-        } catch (e) {
-            showToast(`刪除分類失敗: ${e.message}`, "error");
-        }
+        } catch (e) { showToast(`刪除分類失敗: ${e.message}`, "error"); }
     };
 
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
@@ -1414,6 +1396,7 @@ export default function App() {
                             <Download size={16}/>
                         </button>
                     )}
+                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
