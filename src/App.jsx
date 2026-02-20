@@ -312,7 +312,8 @@ const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
         }
         if (unit === 'tw_qian') w = w * 3.75;
         if (unit === 'tw_liang') w = w * 37.5;
-        onSave({ date, weight: w, totalCost: parseFloat(totalCost) || 0, location, note });
+        // 修正：明確將 id 傳回，讓外層知道這是要「修改」而非「新增」
+        onSave({ id: initialData?.id, date, weight: w, totalCost: parseFloat(totalCost) || 0, location, note });
     };
 
     return (
@@ -481,7 +482,8 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
             showToast("請選擇分類", "error");
             return;
         }
-        onSave({ amount: parseFloat(amount), date, category, note, type, bookId });
+        // 修正：明確將 id 傳回，確保修改時覆寫舊資料
+        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, note, type, bookId });
     };
 
     return (
@@ -1150,14 +1152,17 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
+    // 修正：強化所有的儲存與刪除邏輯，綁定絕對路徑確保操作成功
     const handleGoldSave = async (data) => {
         try {
-            const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
-            if (editingGold) {
-                await updateDoc(doc(ref, editingGold.id), { ...data, updatedAt: serverTimestamp() });
+            const colPath = `artifacts/${appId}/users/${user.uid}/gold_transactions`;
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("修改黃金紀錄成功");
             } else {
-                await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+                const { id, ...payload } = data; // 剔除 undefined 的 id
+                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增黃金紀錄成功");
             }
             setShowGoldAdd(false); setEditingGold(null);
@@ -1165,8 +1170,9 @@ export default function App() {
     };
 
     const handleGoldDelete = async (id) => { 
+        if (!id) return;
         try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', id)); 
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/gold_transactions/${String(id)}`)); 
             setShowGoldAdd(false);
             showToast("已刪除黃金紀錄");
         } catch (e) {
@@ -1176,19 +1182,23 @@ export default function App() {
 
     const handleBookSave = async (data) => {
         try {
+            const colPath = `artifacts/${appId}/users/${user.uid}/account_books`;
             if (data.id) {
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', data.id), { name: data.name, updatedAt: serverTimestamp() });
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("帳本名稱已更新");
             } else {
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...data, createdAt: serverTimestamp() });
+                const { id, ...payload } = data;
+                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增帳本成功");
             }
         } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
     };
 
     const handleBookDelete = async (id) => {
+        if (!id) return;
         try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', id));
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/account_books/${String(id)}`));
             showToast("已刪除帳本");
             if(currentBookId === id) {
                 const remainingBooks = books.filter(b => b.id !== id);
@@ -1202,12 +1212,14 @@ export default function App() {
     const handleExpenseSave = async (data) => {
         if (!data.bookId) return showToast("未選擇帳本", "error");
         try {
-            const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions');
-            if (editingExpense) {
-                await updateDoc(doc(ref, editingExpense.id), { ...data, updatedAt: serverTimestamp() });
+            const colPath = `artifacts/${appId}/users/${user.uid}/expense_transactions`;
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("修改記帳紀錄成功");
             } else {
-                await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+                const { id, ...payload } = data;
+                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() });
                 showToast("新增記帳成功");
             }
             setShowExpenseAdd(false); setEditingExpense(null);
@@ -1215,8 +1227,9 @@ export default function App() {
     };
 
     const handleExpenseDelete = async (id) => {
+        if (!id) return;
         try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', id));
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/expense_transactions/${String(id)}`));
             setShowExpenseAdd(false);
             showToast("已刪除記帳紀錄");
         } catch (e) {
@@ -1224,26 +1237,25 @@ export default function App() {
         }
     };
 
-    // 修正的 Firebase 儲存/修改 分類寫入方法
     const handleCategorySave = async (data) => {
         try {
+            const colPath = `artifacts/${appId}/users/${user.uid}/expense_categories`;
             if (data.id) {
                 const { id, ...payload } = data;
-                // 強制套用 String(id) 作為路徑，防範 indexOf 錯誤並確保覆寫舊資料
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, colPath, String(id)), { ...payload, updatedAt: serverTimestamp() });
                 showToast("分類修改成功");
             } else { 
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...data, createdAt: serverTimestamp() }); 
+                const { id, ...payload } = data;
+                await addDoc(collection(db, colPath), { ...payload, createdAt: serverTimestamp() }); 
                 showToast("新增分類成功");
             }
         } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
     };
 
-    // 修正的 Firebase 刪除 分類方法
     const handleCategoryDelete = async (id) => { 
+        if (!id) return;
         try {
-            // 強制套用 String(id) 作為路徑
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id))); 
+            await deleteDoc(doc(db, `artifacts/${appId}/users/${user.uid}/expense_categories/${String(id)}`)); 
             showToast("已刪除分類");
         } catch (e) {
             showToast(`刪除分類失敗: ${e.message}`, "error");
