@@ -1648,8 +1648,8 @@ export default function App() {
                     <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
                     <div className="space-y-3">
                         <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
-                        {goldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
-                         goldTransactions.map(t => (
+                        {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
+                         sortedGoldTransactions.map(t => (
                              <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
                                  <div className="flex items-center gap-3">
                                      <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
