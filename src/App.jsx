@@ -91,6 +91,11 @@ const formatMonth = (dateString) => {
     return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
 };
 
+// 取得當地時間的 YYYY-MM-DD
+const getLocalYMD = (date = new Date()) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
 // --- Firebase Init ---
 let app, auth, db, googleProvider;
 const isConfigured = !!firebaseConfig.apiKey; 
@@ -453,7 +458,7 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
 
 const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, showToast }) => {
     const [amount, setAmount] = useState(initialData?.amount || '');
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(initialData?.date || getLocalYMD());
     const [type, setType] = useState(initialData?.type || 'expense');
     
     const availableCats = categories.filter(c => c.type === type);
@@ -483,7 +488,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
 
     return (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-             {/* 修正：將最大高度設定為 95vh 確保各種手機畫面都能顯示 */}
              <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                 <div className="p-3 border-b border-gray-100 flex justify-between items-center">
                     <div className="flex bg-gray-100 rounded-lg p-1">
@@ -492,15 +496,12 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                {/* 修正：縮減內距 (p-4) 與垂直間距 (space-y-3) */}
                 <div className="p-4 space-y-3 overflow-y-auto pb-8">
-                    {/* 修正：金額區塊的留白縮小 (py-3)，字體稍微縮小 */}
                     <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-3 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
                          <div className="text-[10px] font-bold opacity-60 mb-0.5">金額</div>
                          <div className="text-3xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={14} className="opacity-30 ml-2"/></div>
                     </div>
                     
-                    {/* 修正：將日期改為緊湊的橫向排列 */}
                     <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
                         <label className="text-xs font-bold text-gray-400 w-12 shrink-0">日期</label>
                         <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent flex-1 font-bold outline-none text-sm text-gray-800"/>
@@ -508,7 +509,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
 
                     <div>
                         <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">分類</label>
-                        {/* 修正：縮小分類按鈕內距，讓畫面更精實 */}
                         <div className="grid grid-cols-4 gap-1.5">
                             {availableCats.map(c => {
                                 const Icon = ICON_MAP[c.icon] || Tag;
@@ -523,7 +523,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                         </div>
                     </div>
 
-                    {/* 修正：將明細與備註改為緊湊的橫向排列 */}
                     <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
                         <label className="text-xs font-bold text-gray-400 w-12 shrink-0">明細</label>
                         <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="如：拿鐵..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
@@ -541,7 +540,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                     )}
                 </div>
              </div>
-             {/* 修正：保持數字鍵盤不影響彈窗本體高度 */}
              {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
         </div>
     );
@@ -774,7 +772,6 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
     );
 };
 
-// --- NEW BACKUP / RESTORE COMPONENT ---
 const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, user, appId, db, showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
     
@@ -904,6 +901,8 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
 
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">資料與設定</div>
                     <div className="space-y-2">
+                        {/* 新增收支日曆到側邊欄 */}
+                        <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
                         <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
                         <button onClick={() => { navigateTo('categories'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'categories' ? 'bg-pink-500/20 text-pink-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Tag size={20} /> <span className="font-bold">分類管理</span></button>
                         <button onClick={() => { navigateTo('backup'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'backup' ? 'bg-indigo-500/20 text-indigo-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Database size={20} /> <span className="font-bold">備份與還原</span></button>
@@ -977,6 +976,11 @@ export default function App() {
         return new Date(now.getFullYear(), now.getMonth(), 1);
     });
     const [historyTab, setHistoryTab] = useState('stats'); 
+    
+    // Calendar specific state
+    const [calendarDate, setCalendarDate] = useState(() => new Date());
+    const [calendarSelectedDate, setCalendarSelectedDate] = useState(() => getLocalYMD());
+    
     const [touchStartX, setTouchStartX] = useState(null);
     const [touchStartY, setTouchStartY] = useState(null);
 
@@ -1280,7 +1284,7 @@ export default function App() {
     const currentMonthStats = useMemo(() => {
         const now = new Date();
         const thisMonth = expenses.filter(e => {
-            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const safeDate = e.date || getLocalYMD();
             const d = new Date(safeDate);
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
@@ -1292,7 +1296,7 @@ export default function App() {
     const pieChartData = useMemo(() => {
         const now = new Date();
         const thisMonthExpenses = expenses.filter(e => {
-            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const safeDate = e.date || getLocalYMD();
             const d = new Date(safeDate);
             return e.type === 'expense' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
@@ -1327,7 +1331,7 @@ export default function App() {
     const dailyExpenses = useMemo(() => {
         const groups = {};
         expenses.forEach(e => {
-            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const safeDate = e.date || getLocalYMD();
             if(!groups[safeDate]) groups[safeDate] = { date: safeDate, list: [], total: 0 };
             groups[safeDate].list.push(e);
             if(e.type === 'expense') groups[safeDate].total -= (Number(e.amount) || 0);
@@ -1338,10 +1342,9 @@ export default function App() {
 
     // 歷史紀錄篩選
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
-    
     const currentHistoryRecords = useMemo(() => {
         return expenses.filter(e => {
-            const safeDate = e.date || new Date().toISOString().split('T')[0];
+            const safeDate = e.date || getLocalYMD();
             return safeDate.startsWith(historyCurrentMonthKey);
         }).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
     }, [expenses, historyCurrentMonthKey]);
@@ -1349,12 +1352,37 @@ export default function App() {
     const historyTotalIncome = currentHistoryRecords.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
     const historyTotalExpense = currentHistoryRecords.filter(e => e.type === 'expense').reduce((a,b) => a + (Number(b.amount) || 0), 0);
 
+    // 日曆視窗計算
+    const calendarYear = calendarDate.getFullYear();
+    const calendarMonth = calendarDate.getMonth();
+    const daysInCalendarMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const firstDayOfCalendarMonth = new Date(calendarYear, calendarMonth, 1).getDay();
+
+    const calendarDailyData = useMemo(() => {
+        const data = {};
+        expenses.forEach(e => {
+            const d = e.date || getLocalYMD(); 
+            if (!data[d]) data[d] = { hasIncome: false, hasExpense: false, list: [] };
+            if (e.type === 'income') data[d].hasIncome = true;
+            if (e.type === 'expense') data[d].hasExpense = true;
+            data[d].list.push(e);
+        });
+        Object.values(data).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        return data;
+    }, [expenses]);
+
+    const calendarDays = Array.from({ length: firstDayOfCalendarMonth }, () => null).concat(
+        Array.from({ length: daysInCalendarMonth }, (_, i) => i + 1)
+    );
+
+    const selectedDayRecords = calendarDailyData[calendarSelectedDate]?.list || [];
+
     const handleTouchStart = (e) => {
         setTouchStartX(e.touches[0].clientX);
         setTouchStartY(e.touches[0].clientY);
     };
 
-    const handleTouchEnd = (e) => {
+    const handleTouchEnd = (e, callbackFn) => {
         if (touchStartX === null || touchStartY === null) return;
         const touchEndX = e.changedTouches[0].clientX;
         const touchEndY = e.changedTouches[0].clientY;
@@ -1363,11 +1391,8 @@ export default function App() {
         const diffY = Math.abs(touchStartY - touchEndY);
 
         if (Math.abs(diffX) > 50 && diffY < 50) {
-            if (diffX > 0) {
-                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-            } else if (diffX < 0) {
-                setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-            }
+            if (diffX > 0) callbackFn(1); // Next
+            else if (diffX < 0) callbackFn(-1); // Prev
         }
         setTouchStartX(null);
         setTouchStartY(null);
@@ -1378,7 +1403,7 @@ export default function App() {
     if (!user) return <LoginView />;
 
     const currentBook = books.find(b => b.id === currentBookId);
-    const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理', 'backup':'備份與還原' };
+    const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'history':'歷史紀錄', 'calendar': '收支日曆', 'categories':'分類管理', 'backup':'備份與還原' };
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
@@ -1396,17 +1421,17 @@ export default function App() {
 
              {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
-                <div className="w-[80px] flex items-center">
+                <div className="w-[80px] flex items-center shrink-0">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
                         <Menu size={24} className="text-gray-700"/>
                     </button>
                 </div>
                 
                 <div className="font-black text-lg text-gray-800 flex justify-center items-center gap-2 flex-1">
-                    {['expense', 'history'].includes(currentView) ? (
+                    {['expense', 'history', 'calendar'].includes(currentView) ? (
                         <div onClick={() => setShowBookManager(true)} className="flex flex-col items-center cursor-pointer hover:bg-gray-50 px-3 py-1 rounded-xl transition-colors border border-transparent hover:border-gray-200">
                             <div className="flex items-center gap-1.5">
-                                <Wallet size={16} className={currentView === 'history' ? 'text-purple-500' : 'text-blue-500'}/>
+                                <Wallet size={16} className={currentView === 'history' || currentView === 'calendar' ? 'text-purple-500' : 'text-blue-500'}/>
                                 <span className="max-w-[120px] truncate text-base leading-none">{viewTitles[currentView]}</span>
                                 <ChevronDown size={14} className="text-gray-400"/>
                             </div>
@@ -1417,15 +1442,21 @@ export default function App() {
                     )}
                 </div>
 
-                <div className="w-[80px] flex justify-end gap-1 items-center">
+                <div className="w-[80px] flex justify-end gap-2 items-center shrink-0">
+                    {/* 右上角專屬日曆按鈕 (僅在首頁顯示) */}
+                    {currentView === 'home' && (
+                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-95 transition-transform" title="收支日曆">
+                            <Calendar size={18}/>
+                        </button>
+                    )}
                     {showInstallBtn && (
-                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 w-8 h-8 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform mr-1" title="下載 APP">
-                            <Download size={16}/>
+                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 w-9 h-9 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform" title="下載 APP">
+                            <Download size={18}/>
                         </button>
                     )}
                     {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
-                        <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
+                        <button onClick={goBack} className="p-2 -mr-1 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
                         </button>
                     )}
@@ -1494,6 +1525,105 @@ export default function App() {
                             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">未實現損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
                         </div>
                      </div>
+                 </div>
+             )}
+
+             {/* === CALENDAR VIEW === */}
+             {currentView === 'calendar' && (
+                 <div 
+                     className="p-4 space-y-5 animate-[fadeIn_0.3s]"
+                     onTouchStart={handleTouchStart}
+                     onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
+                 >
+                     <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
+                         {/* Calendar Header */}
+                         <div className="flex justify-between items-center mb-6">
+                              <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth - 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronLeft size={20}/></button>
+                              <div className="text-lg font-black text-gray-800 tracking-wide select-none">
+                                  {calendarYear}年 {calendarMonth + 1}月
+                              </div>
+                              <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth + 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronRight size={20}/></button>
+                         </div>
+                         
+                         {/* Weekday headers */}
+                         <div className="grid grid-cols-7 gap-1 mb-3 text-center">
+                             {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>)}
+                         </div>
+                         
+                         {/* Days Grid */}
+                         <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
+                             {calendarDays.map((day, idx) => {
+                                 if (day === null) return <div key={`empty-${idx}`} />;
+                                 const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                 const isSelected = calendarSelectedDate === dateStr;
+                                 const isToday = dateStr === getLocalYMD();
+                                 const hasInc = calendarDailyData[dateStr]?.hasIncome;
+                                 const hasExp = calendarDailyData[dateStr]?.hasExpense;
+
+                                 return (
+                                     <div key={dateStr} onClick={() => setCalendarSelectedDate(dateStr)} className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-orange-500 text-white shadow-md shadow-orange-200' : isToday ? 'bg-orange-50 text-orange-800' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                         <span className={`text-sm font-bold ${isSelected ? 'text-white' : ''}`}>{day}</span>
+                                         <div className="flex gap-1 mt-1 h-1.5 justify-center">
+                                             {hasExp && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-rose-400'}`}></div>}
+                                             {hasInc && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`}></div>}
+                                         </div>
+                                     </div>
+                                 )
+                             })}
+                         </div>
+                     </div>
+
+                     {/* Selected Day Details */}
+                     <div>
+                         <div className="flex justify-between items-end px-2 mb-3">
+                             <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+                                 <Calendar size={16} className="text-orange-400"/>
+                                 {calendarSelectedDate.replace(/-/g, '/')} 紀錄
+                             </div>
+                             <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">{selectedDayRecords.length} 筆</div>
+                         </div>
+                         
+                         <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
+                             {selectedDayRecords.length === 0 ? (
+                                 <div className="py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
+                                     <Coffee size={32} className="opacity-20" />
+                                     當日無收支紀錄
+                                 </div>
+                             ) : (
+                                 selectedDayRecords.map((item, i) => {
+                                     const cat = categories.find(c=>c.id===item.category);
+                                     const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                     return (
+                                         <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== selectedDayRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
+                                             <div className="flex items-center gap-4">
+                                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
+                                                     <IconComp size={20}/>
+                                                 </div>
+                                                 <div>
+                                                     <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
+                                                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                                                         {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
+                                                         <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div className="flex items-center gap-3">
+                                                 <div className={`font-black text-lg text-right ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
+                                                     {item.type==='income'?'+':''}{formatMoney(item.amount)}
+                                                 </div>
+                                                 <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                                     <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                                     <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     );
+                                 })
+                             )}
+                         </div>
+                     </div>
+                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                  </div>
              )}
 
@@ -1581,10 +1711,8 @@ export default function App() {
                                                         <IconComp size={20}/>
                                                     </div>
                                                     <div>
-                                                        {/* 修正：優先顯示明細名稱，若無則顯示分類 */}
                                                         <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
                                                         <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                            {/* 若有填寫明細名稱，則顯示分類小標籤 */}
                                                             {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
                                                             <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
                                                         </div>
@@ -1617,7 +1745,7 @@ export default function App() {
                  <div 
                      className="p-4 space-y-5 animate-[fadeIn_0.3s]"
                      onTouchStart={handleTouchStart}
-                     onTouchEnd={handleTouchEnd}
+                     onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
                  >
                      <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
                          <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
@@ -1711,7 +1839,6 @@ export default function App() {
                                                      <div className="flex items-center gap-3">
                                                         <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
                                                         <div>
-                                                            {/* 修正：在歷史紀錄也同步新的明細顯示邏輯 */}
                                                             <div className="font-black text-gray-800 text-sm">{item.itemName || cat?.name || '其他'}</div>
                                                             <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1.5">
                                                                 {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold">{cat?.name || '其他'}</span>}
