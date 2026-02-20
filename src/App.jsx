@@ -21,7 +21,7 @@ import {
   History, Edit2, Bus, Car, Train, Music, Film, Dumbbell, 
   Heart, Zap, Scissors, Briefcase, LayoutGrid, Check,
   ChevronLeft, ChevronRight, PieChart, Undo2, Download, Share,
-  Database, UploadCloud, DownloadCloud
+  Database, UploadCloud, DownloadCloud, ArrowUpDown
 } from 'lucide-react';
 
 // --- Icon Mapping for Categories ---
@@ -94,6 +94,13 @@ const formatMonth = (dateString) => {
 // 取得當地時間的 YYYY-MM-DD
 const getLocalYMD = (date = new Date()) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const getSortTime = (t) => {
+    if (!t) return Infinity; 
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (t.seconds) return t.seconds * 1000;
+    return 0;
 };
 
 // --- Firebase Init ---
@@ -881,6 +888,138 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
     );
 };
 
+// --- 長按拖曳排序模組 (Sortable Day Group) ---
+const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete }) => {
+    const [draggingId, setDraggingId] = useState(null);
+    const [hoverId, setHoverId] = useState(null);
+    const startY = useRef(0);
+    const pressTimer = useRef(null);
+
+    // 拖曳時防止畫面滾動
+    useEffect(() => {
+        if (draggingId) {
+            document.body.style.overflow = 'hidden';
+            document.body.style.touchAction = 'none';
+        } else {
+            document.body.style.overflow = '';
+            document.body.style.touchAction = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+            document.body.style.touchAction = '';
+        }
+    }, [draggingId]);
+
+    const handlePointerStart = (e, item) => {
+        startY.current = e.touches ? e.touches[0].clientY : e.clientY;
+        pressTimer.current = setTimeout(() => {
+            setDraggingId(item.id);
+            setHoverId(item.id);
+            if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+        }, 400); // 長按 0.4 秒觸發
+    };
+
+    const handlePointerMove = (e) => {
+        if (!draggingId) {
+            const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+            // 如果在長按判定前就滑動超過 10px，取消長按判定 (視為一般滾動網頁)
+            if (Math.abs(currentY - startY.current) > 10) {
+                clearTimeout(pressTimer.current);
+            }
+            return;
+        }
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        const elem = document.elementFromPoint(clientX, clientY);
+        const dropItem = elem?.closest('.sortable-item');
+        if (dropItem) {
+            const targetId = dropItem.getAttribute('data-id');
+            if (targetId && targetId !== hoverId) {
+                setHoverId(targetId);
+            }
+        }
+    };
+
+    const handlePointerEnd = () => {
+        clearTimeout(pressTimer.current);
+        if (draggingId && hoverId && draggingId !== hoverId) {
+            const item1 = list.find(i => i.id === draggingId);
+            const item2 = list.find(i => i.id === hoverId);
+            if (item1 && item2) onSwap(item1, item2);
+        }
+        setDraggingId(null);
+        setHoverId(null);
+    };
+
+    // 產生即時交換視覺效果
+    let displayList = [...list];
+    if (draggingId && hoverId && draggingId !== hoverId) {
+        const idx1 = displayList.findIndex(i => i.id === draggingId);
+        const idx2 = displayList.findIndex(i => i.id === hoverId);
+        if (idx1 !== -1 && idx2 !== -1) {
+            const temp = displayList[idx1];
+            displayList[idx1] = displayList[idx2];
+            displayList[idx2] = temp;
+        }
+    }
+
+    return (
+        <div 
+            className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden transition-colors relative"
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerEnd}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerEnd}
+            onMouseLeave={handlePointerEnd}
+        >
+            {displayList.map((item, i) => {
+                const cat = categories.find(c=>c.id===item.category);
+                const IconComp = ICON_MAP[cat?.icon] || Tag;
+                const isDraggingThis = item.id === draggingId;
+
+                return (
+                    <div 
+                        key={item.id} 
+                        data-id={item.id}
+                        className={`sortable-item p-4 flex justify-between items-center transition-all duration-200 
+                            ${i !== displayList.length-1 ? 'border-b border-gray-50' : ''} 
+                            ${isDraggingThis ? 'opacity-50 scale-[0.98] bg-orange-50/50 z-10 shadow-inner' : 'bg-white'}
+                        `}
+                        onTouchStart={(e) => handlePointerStart(e, item)}
+                        onMouseDown={(e) => handlePointerStart(e, item)}
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                    >
+                        <div className="flex items-center gap-4 pointer-events-none">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
+                                <IconComp size={20}/>
+                            </div>
+                            <div>
+                                <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
+                                <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
+                                    <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className={`font-black text-lg text-right pointer-events-none ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
+                                {item.type==='income'?'+':''}{formatMoney(item.amount)}
+                            </div>
+                            {/* 防止點擊按鈕時觸發拖曳 */}
+                            <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
 const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
     return (
         <>
@@ -1177,6 +1316,21 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
+    // --- 交換建立時間來改變排序 (長按拖曳功能的核心) ---
+    const handleExpenseSwap = async (item1, item2) => {
+        try {
+            const fallbackTime = new Date();
+            const time1 = item1.createdAt || fallbackTime;
+            const time2 = item2.createdAt || fallbackTime;
+            
+            // 交換 Firebase 的 timestamp，這樣重整也必定維持新順序
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item1.id)), { createdAt: time2 });
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item2.id)), { createdAt: time1 });
+        } catch (e) {
+            showToast(`排序失敗: ${e.message}`, "error");
+        }
+    };
+
     // --- 嚴格的 Firebase CRUD 函數 ---
     const handleGoldSave = async (data) => {
         try {
@@ -1281,6 +1435,14 @@ export default function App() {
     const goldProfit = goldCurrentVal - goldTotalCost;
     const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
 
+    const sortedGoldTransactions = useMemo(() => {
+        return [...goldTransactions].sort((a,b) => {
+            const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+            if (dateDiff !== 0) return dateDiff;
+            return getSortTime(b.createdAt) - getSortTime(a.createdAt);
+        });
+    }, [goldTransactions]);
+
     const currentMonthStats = useMemo(() => {
         const now = new Date();
         const thisMonth = expenses.filter(e => {
@@ -1336,7 +1498,8 @@ export default function App() {
             groups[safeDate].list.push(e);
             if(e.type === 'expense') groups[safeDate].total -= (Number(e.amount) || 0);
         });
-        Object.values(groups).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        // 依照時間戳精準排序，最新在最上面
+        Object.values(groups).forEach(g => g.list.sort((a,b) => getSortTime(b.createdAt) - getSortTime(a.createdAt)));
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
@@ -1346,7 +1509,11 @@ export default function App() {
         return expenses.filter(e => {
             const safeDate = e.date || getLocalYMD();
             return safeDate.startsWith(historyCurrentMonthKey);
-        }).sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+        }).sort((a,b) => {
+            const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+            if (dateDiff !== 0) return dateDiff;
+            return getSortTime(b.createdAt) - getSortTime(a.createdAt);
+        });
     }, [expenses, historyCurrentMonthKey]);
 
     const historyTotalIncome = currentHistoryRecords.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
@@ -1367,7 +1534,7 @@ export default function App() {
             if (e.type === 'expense') data[d].hasExpense = true;
             data[d].list.push(e);
         });
-        Object.values(data).forEach(g => g.list.sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0)));
+        Object.values(data).forEach(g => g.list.sort((a,b) => getSortTime(b.createdAt) - getSortTime(a.createdAt)));
         return data;
     }, [expenses]);
 
@@ -1579,48 +1746,26 @@ export default function App() {
                              <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
                                  <Calendar size={16} className="text-orange-400"/>
                                  {calendarSelectedDate.replace(/-/g, '/')} 紀錄
+                                 {selectedDayRecords.length > 1 && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full animate-pulse ml-1 flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
                              </div>
                              <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">{selectedDayRecords.length} 筆</div>
                          </div>
                          
-                         <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
-                             {selectedDayRecords.length === 0 ? (
-                                 <div className="py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
-                                     <Coffee size={32} className="opacity-20" />
-                                     當日無收支紀錄
-                                 </div>
-                             ) : (
-                                 selectedDayRecords.map((item, i) => {
-                                     const cat = categories.find(c=>c.id===item.category);
-                                     const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                     return (
-                                         <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== selectedDayRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
-                                             <div className="flex items-center gap-4">
-                                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
-                                                     <IconComp size={20}/>
-                                                 </div>
-                                                 <div>
-                                                     <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
-                                                     <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                         {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
-                                                         <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
-                                                     </div>
-                                                 </div>
-                                             </div>
-                                             <div className="flex items-center gap-3">
-                                                 <div className={`font-black text-lg text-right ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
-                                                     {item.type==='income'?'+':''}{formatMoney(item.amount)}
-                                                 </div>
-                                                 <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                                     <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
-                                                     <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     );
-                                 })
-                             )}
-                         </div>
+                         {selectedDayRecords.length === 0 ? (
+                             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
+                                 <Coffee size={32} className="opacity-20" />
+                                 當日無收支紀錄
+                             </div>
+                         ) : (
+                             <SortableDayGroup 
+                                 list={selectedDayRecords}
+                                 categories={categories}
+                                 onSwap={handleExpenseSwap}
+                                 setEditingExpense={setEditingExpense}
+                                 setShowExpenseAdd={setShowExpenseAdd}
+                                 setExpenseToDelete={setExpenseToDelete}
+                             />
+                         )}
                      </div>
                      {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
                      <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
@@ -1699,38 +1844,21 @@ export default function App() {
                     <div className="space-y-6 pb-10 mt-2">
                         {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
                             <div key={idx} className="animate-[fadeIn_0.3s]">
-                                <div className="flex justify-between items-end px-2 mb-3"><div className="font-bold text-gray-500 text-sm">{formatDate(group.date)}</div><div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">日支 {formatMoney(Math.abs(group.total))}</div></div>
-                                <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] overflow-hidden">
-                                    {group.list.map((item, i) => {
-                                        const cat = categories.find(c=>c.id===item.category);
-                                        const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                        return (
-                                            <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== group.list.length-1 ? 'border-b border-gray-50' : ''}`}>
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
-                                                        <IconComp size={20}/>
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
-                                                        <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                            {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
-                                                            <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`font-black text-lg text-right ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
-                                                        {item.type==='income'?'+':''}{formatMoney(item.amount)}
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                                        <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
-                                                        <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="flex justify-between items-end px-2 mb-3">
+                                    <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+                                        {formatDate(group.date)}
+                                        {group.list.length > 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
+                                    </div>
+                                    <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">日支 {formatMoney(Math.abs(group.total))}</div>
                                 </div>
+                                <SortableDayGroup 
+                                    list={group.list}
+                                    categories={categories}
+                                    onSwap={handleExpenseSwap}
+                                    setEditingExpense={setEditingExpense}
+                                    setShowExpenseAdd={setShowExpenseAdd}
+                                    setExpenseToDelete={setExpenseToDelete}
+                                />
                             </div>
                         ))}
                     </div>
