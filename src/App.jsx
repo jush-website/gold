@@ -611,92 +611,133 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     );
 };
 
-const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
-    const [editingId, setEditingId] = useState(null);
-    const [name, setName] = useState('');
-    const [icon, setIcon] = useState('tag');
-    const [type, setType] = useState('expense');
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+// --- NEW CATEGORY MODAL ---
+const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast }) => {
+    const [name, setName] = useState(initialData?.name || '');
+    const [type, setType] = useState(initialData?.type || defaultType);
+    const [icon, setIcon] = useState(initialData?.icon || (type === 'expense' ? 'shopping-bag' : 'wallet'));
 
-    const handleEdit = (cat) => {
-        setEditingId(cat.id);
-        setName(cat.name);
-        setIcon(cat.icon);
-        setType(cat.type);
-    };
-
-    const handleAddNew = () => {
-        setEditingId(null);
-        setName('');
-        setIcon('tag');
-    };
-
-    const handleSave = () => {
+    const handleSubmit = () => {
         if (!name.trim()) {
             showToast("請輸入分類名稱", "error");
             return;
         }
-        onSave({ id: editingId, name, icon, type });
-        handleAddNew();
+        onSave({ id: initialData?.id, name: name.trim(), icon, type });
+        onClose();
     };
 
     return (
-        <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-                <div className="flex bg-gray-100 rounded-xl p-1 mb-6 shadow-inner border border-gray-100">
-                    <button onClick={()=>{setType('expense'); if(!editingId) setIcon('shopping-bag');}} className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${type==='expense'?'bg-red-50 text-red-600 shadow-sm':'text-gray-400'}`}>支出分類</button>
-                    <button onClick={()=>{setType('income'); if(!editingId) setIcon('wallet');}} className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${type==='income'?'bg-green-50 text-green-600 shadow-sm':'text-gray-400'}`}>收入分類</button>
-                </div>
-                
-                <div className="mb-5">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">分類名稱</label>
-                    <input value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"/>
+        <div className="fixed inset-0 z-[90] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button onClick={() => { setType('expense'); if (!initialData) setIcon('shopping-bag'); }} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type === 'expense' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}>支出分類</button>
+                        <button onClick={() => { setType('income'); if (!initialData) setIcon('wallet'); }} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type === 'income' ? 'bg-white text-green-500 shadow-sm' : 'text-gray-400'}`}>收入分類</button>
+                    </div>
+                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"><X size={20} /></button>
                 </div>
 
-                <div className="mb-6">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">選擇圖示</label>
-                    <div className="grid grid-cols-6 gap-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 h-48 overflow-y-auto">
-                        {Object.keys(ICON_MAP).map(iconKey => {
-                            const IconComp = ICON_MAP[iconKey];
-                            return (
-                                <button key={iconKey} onClick={()=>setIcon(iconKey)} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${icon === iconKey ? (type==='expense'?'bg-red-500 text-white shadow-md':'bg-green-500 text-white shadow-md') : 'bg-white text-gray-400 hover:bg-gray-100 shadow-sm border border-gray-100'}`}>
-                                    <IconComp size={20}/>
-                                </button>
-                            )
-                        })}
+                <div className="p-5 space-y-5 overflow-y-auto pb-8">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">分類名稱</label>
+                        <input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"/>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">選擇圖示</label>
+                        <div className="grid grid-cols-6 gap-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 max-h-48 overflow-y-auto hide-scrollbar">
+                            {Object.keys(ICON_MAP).map(iconKey => {
+                                const IconComp = ICON_MAP[iconKey];
+                                return (
+                                    <button key={iconKey} onClick={()=>setIcon(iconKey)} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${icon === iconKey ? (type==='expense'?'bg-red-500 text-white shadow-md':'bg-green-500 text-white shadow-md') : 'bg-white text-gray-400 hover:bg-gray-100 shadow-sm border border-gray-100'}`}>
+                                        <IconComp size={20}/>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button onClick={handleSubmit} className={`w-full py-4 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-transform text-lg ${type==='expense'?'bg-red-500 shadow-red-200 hover:bg-red-600':'bg-green-500 shadow-green-200 hover:bg-green-600'}`}>
+                            {initialData ? '儲存修改' : '確認新增'}
+                        </button>
                     </div>
                 </div>
+             </div>
+        </div>
+    );
+};
 
-                <div className="flex gap-3">
-                    {editingId && <button onClick={handleAddNew} className="py-3.5 px-6 font-bold text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors">取消</button>}
-                    <button onClick={handleSave} disabled={!name.trim()} className={`flex-1 py-3.5 text-white rounded-xl font-bold shadow-md transition-all ${type==='expense'?'bg-red-500 hover:bg-red-600 shadow-red-200':'bg-green-500 hover:bg-green-600 shadow-green-200'} disabled:opacity-50`}>
-                        {editingId ? '儲存修改' : '新增分類'}
-                    </button>
-                </div>
+// --- REFACTORED CATEGORY MANAGER ---
+const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
+    const [activeTab, setActiveTab] = useState('expense');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCat, setEditingCat] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+
+    const filteredCategories = categories.filter(c => c.type === activeTab);
+
+    const handleAddNew = () => {
+        setEditingCat(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (cat) => {
+        setEditingCat(cat);
+        setIsModalOpen(true);
+    };
+
+    return (
+        <div className="p-4 space-y-4 animate-[fadeIn_0.3s]">
+            {/* 頂部 Tab 切換區 */}
+            <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+                <button onClick={() => setActiveTab('expense')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'expense' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>支出分類</button>
+                <button onClick={() => setActiveTab('income')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'income' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>收入分類</button>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-                <h4 className="font-bold text-gray-800 text-base mb-4 flex items-center gap-2"><LayoutGrid size={18} className="text-purple-500"/> 現有{type==='expense'?'支出':'收入'}分類</h4>
-                <div className="grid grid-cols-2 gap-3">
-                    {categories.filter(c=>c.type===type).map(cat => {
-                        const IconComp = ICON_MAP[cat.icon] || Tag;
-                        return (
-                            <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-purple-200 transition-colors group">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm ${type==='expense'?'text-red-500':'text-green-500'}`}>
-                                        <IconComp size={18}/>
+            {/* 列表管理區 (固定高度與滾動機制) */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                        <LayoutGrid size={18} className="text-purple-500"/>
+                        現有{activeTab === 'expense' ? '支出' : '收入'}分類
+                    </h4>
+                </div>
+
+                <div className="max-h-[55vh] overflow-y-auto hide-scrollbar pr-1 pb-2">
+                    {filteredCategories.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400 font-bold text-sm bg-gray-50 rounded-2xl border border-dashed border-gray-200">目前尚無分類</div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-3 content-start">
+                            {filteredCategories.map(cat => {
+                                const IconComp = ICON_MAP[cat.icon] || Tag;
+                                return (
+                                    <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-purple-200 hover:bg-purple-50/30 transition-colors group">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm transition-colors ${activeTab === 'expense' ? 'text-red-500 group-hover:text-red-600' : 'text-green-500 group-hover:text-green-600'}`}>
+                                                <IconComp size={18}/>
+                                            </div>
+                                            <span className="font-bold text-sm text-gray-700">{cat.name}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <button onClick={() => handleEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-white rounded-lg transition-colors"><Edit2 size={14}/></button>
+                                            <button onClick={() => setShowDeleteConfirm(cat)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-colors"><Trash2 size={14}/></button>
+                                        </div>
                                     </div>
-                                    <span className="font-bold text-sm text-gray-700">{cat.name}</span>
-                                </div>
-                                <div className="flex flex-col gap-1 transition-opacity">
-                                    <button onClick={()=>handleEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-500 bg-white rounded shadow-sm"><Edit2 size={12}/></button>
-                                    <button onClick={()=>setShowDeleteConfirm(cat)} className="p-1.5 text-gray-400 hover:text-red-500 bg-white rounded shadow-sm"><Trash2 size={12}/></button>
-                                </div>
-                            </div>
-                        )
-                    })}
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* 固定新增按鈕 */}
+            <button onClick={handleAddNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-200 active:scale-95 transition-transform">
+                <Plus size={20}/> 新增{activeTab === 'expense' ? '支出' : '收入'}分類
+            </button>
+
+            {/* Modal 與提示視窗 */}
+            {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
         </div>
     );
