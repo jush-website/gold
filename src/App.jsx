@@ -503,7 +503,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                <div className="p-4 space-y-3 overflow-y-auto pb-8">
+                <div className="p-4 space-y-3 overflow-y-auto pb-8 hide-scrollbar">
                     <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-3 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
                          <div className="text-[10px] font-bold opacity-60 mb-0.5">金額</div>
                          <div className="text-3xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={14} className="opacity-30 ml-2"/></div>
@@ -584,7 +584,7 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
                     <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
                 </div>
 
-                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2">
+                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
                     {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
                     {books.map(book => {
                         const isCurrent = book.id === currentBookId;
@@ -678,10 +678,10 @@ const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast })
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"><X size={20} /></button>
                 </div>
 
-                <div className="p-5 space-y-5 overflow-y-auto pb-8">
+                <div className="p-5 space-y-5 overflow-y-auto pb-8 hide-scrollbar">
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">分類名稱</label>
-                        <input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all"/>
+                        <input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
                     </div>
 
                     <div>
@@ -888,13 +888,12 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
     );
 };
 
-// --- 全新設計的長按拖曳排序模組 (無跳動版 + 卡片化設計) ---
-const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete }) => {
+// --- 全新設計的長按拖曳排序模組 (無跳動版 + 卡片化設計 + 邊緣自動滾動) ---
+const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete, scrollContainerId }) => {
     const [draggingId, setDraggingId] = useState(null);
     const [currentList, setCurrentList] = useState(list);
     const startY = useRef(0);
     const pressTimer = useRef(null);
-    const containerRef = useRef(null);
     const autoScrollRef = useRef(null);
     const lastTouch = useRef({ x: 0, y: 0 });
     const draggingIdRef = useRef(null);
@@ -978,32 +977,30 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
 
         checkSwap(clientX, clientY);
 
-        // 邊緣自動滾動邏輯引擎
-        if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            const threshold = 80; // 邊緣感應區 80px
+        // 邊緣自動滾動邏輯引擎 (偵測上層傳入的 scrollContainerId)
+        if (scrollContainerId) {
+            const scrollElem = document.getElementById(scrollContainerId);
+            if (scrollElem) {
+                const rect = scrollElem.getBoundingClientRect();
+                const threshold = 100; // 邊緣感應區 100px
 
-            if (clientY < rect.top + threshold) {
-                if (!autoScrollRef.current) {
-                    autoScrollRef.current = setInterval(() => {
-                        if (containerRef.current) {
-                            containerRef.current.scrollTop -= 10;
-                            // 滾動時持續偵測手指底下的新卡片
+                if (clientY < rect.top + threshold) {
+                    if (!autoScrollRef.current) {
+                        autoScrollRef.current = setInterval(() => {
+                            scrollElem.scrollTop -= 15;
                             checkSwap(lastTouch.current.x, lastTouch.current.y);
-                        }
-                    }, 16);
-                }
-            } else if (clientY > rect.bottom - threshold) {
-                if (!autoScrollRef.current) {
-                    autoScrollRef.current = setInterval(() => {
-                        if (containerRef.current) {
-                            containerRef.current.scrollTop += 10;
+                        }, 16);
+                    }
+                } else if (clientY > rect.bottom - threshold) {
+                    if (!autoScrollRef.current) {
+                        autoScrollRef.current = setInterval(() => {
+                            scrollElem.scrollTop += 15;
                             checkSwap(lastTouch.current.x, lastTouch.current.y);
-                        }
-                    }, 16);
+                        }, 16);
+                    }
+                } else {
+                    stopAutoScroll();
                 }
-            } else {
-                stopAutoScroll();
             }
         }
     };
@@ -1027,8 +1024,7 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
 
     return (
         <div 
-            ref={containerRef}
-            className="max-h-[60vh] overflow-y-auto hide-scrollbar space-y-3 px-1 py-2 relative"
+            className="space-y-3 relative"
             onTouchMove={handlePointerMove}
             onTouchEnd={handlePointerEnd}
             onMouseMove={handlePointerMove}
@@ -1044,20 +1040,20 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                     <div 
                         key={item.id} 
                         data-id={item.id}
-                        className={`sortable-item h-[88px] p-4 flex justify-between items-center rounded-2xl border transition-all duration-300 
-                            ${isDraggingThis ? 'scale-[1.03] bg-orange-50/90 shadow-[0_15px_35px_rgba(0,0,0,0.15)] z-20 relative ring-2 ring-orange-400 border-orange-300' : 'bg-white shadow-sm z-0 relative border-gray-100 hover:border-blue-100 hover:shadow-md'}
+                        className={`sortable-item h-[88px] px-4 flex justify-between items-center rounded-[1.25rem] border transition-all duration-300 w-full
+                            ${isDraggingThis ? 'scale-[1.03] bg-orange-50/90 shadow-[0_15px_35px_rgba(0,0,0,0.15)] z-20 relative ring-2 ring-orange-400 border-orange-300' : 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] z-0 relative border-gray-100 hover:border-blue-100'}
                         `}
                         onTouchStart={(e) => handlePointerStart(e, item)}
                         onMouseDown={(e) => handlePointerStart(e, item)}
                         style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: draggingId ? 'none' : 'auto' }}
                     >
-                        {/* 左側：圖示與名稱區塊 (確保不會被壓縮到變形) */}
-                        <div className="flex items-center gap-4 pointer-events-none flex-1 min-w-0">
+                        {/* 左側：圖示與名稱區塊 (嚴格彈性佈局確保不變形) */}
+                        <div className="flex items-center gap-4 pointer-events-none flex-1 min-w-0 h-full">
                             <div className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
                                 <IconComp size={20}/>
                             </div>
-                            <div className="flex flex-col justify-center flex-1 min-w-0">
-                                <div className="font-black text-gray-800 text-base truncate">{item.itemName || cat?.name || '其他'}</div>
+                            <div className="flex flex-col justify-center flex-1 min-w-0 h-full">
+                                <div className="font-black text-gray-800 text-base truncate leading-tight">{item.itemName || cat?.name || '其他'}</div>
                                 <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
                                     {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
                                     <span className="truncate">{item.note || '無備註'}</span>
@@ -1066,13 +1062,13 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                         </div>
 
                         {/* 右側：金額與操作按鈕區塊 */}
-                        <div className="flex items-center gap-4 shrink-0 pl-2">
+                        <div className="flex items-center gap-4 shrink-0 pl-2 h-full">
                             <div className={`font-black text-lg text-right pointer-events-none ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
                                 {item.type==='income'?'+':''}{formatMoney(item.amount)}
                             </div>
-                            <div className="flex flex-col gap-2 border-l border-gray-100 pl-3">
-                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                            <div className="flex flex-col gap-2 border-l border-gray-100 pl-3 justify-center h-full">
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
+                                <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                             </div>
                         </div>
                     </div>
@@ -1377,14 +1373,12 @@ export default function App() {
         } finally { setPriceLoading(false); }
     };
 
-    // --- 交換建立時間來改變排序 (長按拖曳功能的核心) ---
     const handleExpenseSwap = async (item1, item2) => {
         try {
             const fallbackTime = new Date();
             const time1 = item1.createdAt || fallbackTime;
             const time2 = item2.createdAt || fallbackTime;
             
-            // 交換 Firebase 的 timestamp，這樣重整也必定維持新順序
             await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item1.id)), { createdAt: time2 });
             await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item2.id)), { createdAt: time1 });
         } catch (e) {
@@ -1392,7 +1386,6 @@ export default function App() {
         }
     };
 
-    // --- 嚴格的 Firebase CRUD 函數 ---
     const handleGoldSave = async (data) => {
         try {
             if (data.id) {
@@ -1559,12 +1552,10 @@ export default function App() {
             groups[safeDate].list.push(e);
             if(e.type === 'expense') groups[safeDate].total -= (Number(e.amount) || 0);
         });
-        // 依照時間戳精準排序，最新在最上面
         Object.values(groups).forEach(g => g.list.sort((a,b) => getSortTime(b.createdAt) - getSortTime(a.createdAt)));
         return Object.values(groups).sort((a,b) => new Date(b.date) - new Date(a.date));
     }, [expenses]);
 
-    // 歷史紀錄篩選
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${(currentHistoryDate.getMonth() + 1).toString().padStart(2, '0')}`;
     const currentHistoryRecords = useMemo(() => {
         return expenses.filter(e => {
@@ -1580,7 +1571,6 @@ export default function App() {
     const historyTotalIncome = currentHistoryRecords.filter(e => e.type === 'income').reduce((a,b) => a + (Number(b.amount) || 0), 0);
     const historyTotalExpense = currentHistoryRecords.filter(e => e.type === 'expense').reduce((a,b) => a + (Number(b.amount) || 0), 0);
 
-    // 日曆視窗計算
     const calendarYear = calendarDate.getFullYear();
     const calendarMonth = calendarDate.getMonth();
     const daysInCalendarMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
@@ -1634,21 +1624,19 @@ export default function App() {
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'history':'歷史紀錄', 'calendar': '收支日曆', 'categories':'分類管理', 'backup':'備份與還原' };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-800 pb-20 font-sans touch-pan-y">
+        /* 根節點改為滿版不滾動，將滾動權交給內部視窗 */
+        <div className="h-[100dvh] bg-gray-50 text-gray-800 font-sans flex flex-col overflow-hidden touch-pan-y">
              <style>{`
-                 html, body { overscroll-behavior-x: none; touch-action: pan-y; }
                  .hide-scrollbar::-webkit-scrollbar { display: none; } 
                  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } 
                  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
              `}</style>
              
-             {/* 全域 Toast 提示 */}
              <Toast message={toast.message} type={toast.type} />
-
              <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
              {/* TOP NAVIGATION BAR */}
-             <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
+             <div className="bg-white shrink-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
                 <div className="w-[80px] flex items-center shrink-0">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
                         <Menu size={24} className="text-gray-700"/>
@@ -1671,7 +1659,6 @@ export default function App() {
                 </div>
 
                 <div className="w-[80px] flex justify-end gap-2 items-center shrink-0">
-                    {/* 右上角專屬日曆按鈕 (僅在首頁顯示) */}
                     {currentView === 'home' && (
                         <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-95 transition-transform" title="收支日曆">
                             <Calendar size={18}/>
@@ -1682,7 +1669,6 @@ export default function App() {
                             <Download size={18}/>
                         </button>
                     )}
-                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-1 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1694,387 +1680,402 @@ export default function App() {
              {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
              {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
 
-             {/* === HOME DASHBOARD VIEW === */}
-             {currentView === 'home' && (
-                 <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-                     <div onClick={() => navigateTo('expense')} className="bg-gradient-to-b from-white to-gray-50/50 rounded-[2rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-gray-200/80 cursor-pointer transform active:scale-[0.98] transition-all relative overflow-hidden">
-                        <div className="flex justify-between items-center mb-6 relative z-10">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
-                                <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || (books.length === 0 ? '目前無帳本' : '生活記帳')}</span>
+             {/* MAIN CONTENT AREA */}
+             <div className="flex-1 overflow-hidden relative">
+                 {/* === HOME DASHBOARD VIEW === */}
+                 {currentView === 'home' && (
+                     <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 animate-[fadeIn_0.3s] pb-24">
+                         <div onClick={() => navigateTo('expense')} className="bg-gradient-to-b from-white to-gray-50/50 rounded-[2rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-gray-200/80 cursor-pointer transform active:scale-[0.98] transition-all relative overflow-hidden">
+                            <div className="flex justify-between items-center mb-6 relative z-10">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
+                                    <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || (books.length === 0 ? '目前無帳本' : '生活記帳')}</span>
+                                </div>
+                                <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                             </div>
-                            <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
-                        </div>
 
-                        <div className="relative w-48 h-48 mx-auto mb-6 relative z-10">
-                            <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-md">
-                                <circle r="15.9155" cx="18" cy="18" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
-                                {pieChartData.map(slice => (
-                                    <circle 
-                                        key={slice.id}
-                                        r="15.9155" cx="18" cy="18" fill="transparent" 
-                                        stroke={slice.color} strokeWidth="3.5" 
-                                        strokeDasharray={slice.dashArray} strokeDashoffset={slice.offset}
-                                        className="transition-all duration-1000 ease-out"
-                                    />
+                            <div className="relative w-48 h-48 mx-auto mb-6 relative z-10">
+                                <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 drop-shadow-md">
+                                    <circle r="15.9155" cx="18" cy="18" fill="transparent" stroke="#f3f4f6" strokeWidth="3" />
+                                    {pieChartData.map(slice => (
+                                        <circle 
+                                            key={slice.id}
+                                            r="15.9155" cx="18" cy="18" fill="transparent" 
+                                            stroke={slice.color} strokeWidth="3.5" 
+                                            strokeDasharray={slice.dashArray} strokeDashoffset={slice.offset}
+                                            className="transition-all duration-1000 ease-out"
+                                        />
+                                    ))}
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-white/30 rounded-full blur-[0.5px]"></div>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest drop-shadow-sm">本月收支</div>
+                                    <div className="text-sm font-black text-emerald-500 mb-0.5 drop-shadow-sm">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
+                                    <div className="text-sm font-black text-rose-500 drop-shadow-sm">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap justify-center gap-2.5 relative z-10">
+                                {pieChartData.length === 0 ? (
+                                    <div className="text-xs text-gray-400 font-bold bg-white border border-gray-100 px-4 py-2 rounded-xl w-full text-center">本月尚無支出紀錄</div>
+                                ) : pieChartData.map(slice => (
+                                    <div key={slice.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-sm hover:shadow transition-shadow">
+                                        <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: slice.color}}></span>
+                                        <span className="text-[10px] text-gray-600 font-bold">{slice.name}</span>
+                                        <span className="text-[10px] text-gray-800 font-black">{slice.percent.toFixed(0)}%</span>
+                                    </div>
                                 ))}
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-white/30 rounded-full blur-[0.5px]"></div>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <div className="text-xs font-bold text-gray-400 mb-1.5 tracking-widest drop-shadow-sm">本月收支</div>
-                                <div className="text-sm font-black text-emerald-500 mb-0.5 drop-shadow-sm">+{formatMoney(currentMonthStats.income).replace(/[^0-9,.]/g, '')}</div>
-                                <div className="text-sm font-black text-rose-500 drop-shadow-sm">-{formatMoney(currentMonthStats.expense).replace(/[^0-9,.]/g, '')}</div>
                             </div>
-                        </div>
+                         </div>
 
-                        <div className="flex flex-wrap justify-center gap-2.5 relative z-10">
-                            {pieChartData.length === 0 ? (
-                                <div className="text-xs text-gray-400 font-bold bg-white border border-gray-100 px-4 py-2 rounded-xl w-full text-center">本月尚無支出紀錄</div>
-                            ) : pieChartData.map(slice => (
-                                <div key={slice.id} className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-gray-100 shadow-sm hover:shadow transition-shadow">
-                                    <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: slice.color}}></span>
-                                    <span className="text-[10px] text-gray-600 font-bold">{slice.name}</span>
-                                    <span className="text-[10px] text-gray-800 font-black">{slice.percent.toFixed(0)}%</span>
+                         <div onClick={() => navigateTo('gold')} className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden cursor-pointer transform active:scale-[0.98] transition-all border border-orange-400/30">
+                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-10 -mb-10 blur-2xl pointer-events-none"></div>
+                            <div className="flex justify-between items-center mb-6 relative z-10">
+                                <div className="flex items-center gap-2"><div className="p-2 bg-white/20 rounded-xl backdrop-blur-md"><Coins size={18}/></div><span className="font-bold tracking-wide">我的金庫</span></div>
+                                <span className="text-xs font-bold bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">查看詳情 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
+                            </div>
+                            <div className="text-orange-50 text-xs font-bold mb-1 relative z-10">總市值 (TWD)</div>
+                            <div className="text-4xl font-black mb-6 tracking-tight relative z-10">{formatMoney(goldCurrentVal)}</div>
+                            <div className="grid grid-cols-2 gap-4 relative z-10">
+                                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">總重量</div><div className="font-bold text-lg flex items-end gap-1">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}<span className="text-xs mb-0.5 opacity-80">錢</span></div></div>
+                                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">未實現損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
+                            </div>
+                         </div>
+                     </div>
+                 )}
+
+                 {/* === EXPENSE VIEW === (採用 Flex 佈局佔滿 2/3) */}
+                 {currentView === 'expense' && (
+                    <div className="h-full flex flex-col animate-[fadeIn_0.3s]">
+                        {/* 上半部：精簡版總結餘與按鈕 (保留固定高度，不隨內容捲動) */}
+                        <div className="px-4 pt-4 pb-2 shrink-0 space-y-3 z-10">
+                            <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-gray-100">
+                                <div className="text-center mb-3">
+                                     <div className="text-gray-400 text-[10px] font-bold mb-1 bg-gray-50 inline-block px-3 py-1 rounded-full">{new Date().getMonth()+1}月 總結餘</div>
+                                     <div className={`text-3xl font-black tracking-tight leading-none ${currentMonthStats.balance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatMoney(currentMonthStats.balance)}</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100/50 flex flex-col justify-center"><div className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold mb-0.5"><ArrowLeft size={12}/> 收入</div><div className="font-black text-gray-800 text-lg leading-none">{formatMoney(currentMonthStats.income)}</div></div>
+                                    <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100/50 flex flex-col justify-center"><div className="flex items-center gap-1 text-rose-500 text-[10px] font-bold mb-0.5">支出 <ArrowRight size={12}/></div><div className="font-black text-gray-800 text-lg leading-none">{formatMoney(currentMonthStats.expense)}</div></div>
+                                </div>
+                            </div>
+                            <button onClick={() => { 
+                                if(books.length === 0) return showToast('請先新增帳本', 'error');
+                                setEditingExpense(null); 
+                                setShowExpenseAdd(true); 
+                            }} className="w-full bg-blue-600 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={18}/> 記一筆</button>
+                        </div>
+                        
+                        {/* 下半部：紀錄清單 (自動填滿剩下 2/3 高度並提供內建捲軸) */}
+                        <div id="expense-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-5">
+                            {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
+                                <div key={idx} className="animate-[fadeIn_0.3s]">
+                                    <div className="flex justify-between items-end px-2 mb-3">
+                                        <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+                                            {formatDate(group.date)}
+                                            {group.list.length > 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
+                                        </div>
+                                        <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">日支 {formatMoney(Math.abs(group.total))}</div>
+                                    </div>
+                                    <SortableDayGroup 
+                                        list={group.list}
+                                        categories={categories}
+                                        onSwap={handleExpenseSwap}
+                                        setEditingExpense={setEditingExpense}
+                                        setShowExpenseAdd={setShowExpenseAdd}
+                                        setExpenseToDelete={setExpenseToDelete}
+                                        scrollContainerId="expense-scroll-container"
+                                    />
                                 </div>
                             ))}
                         </div>
-                     </div>
+                        {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                        <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} showToast={showToast} />
+                        <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
+                    </div>
+                 )}
 
-                     <div onClick={() => navigateTo('gold')} className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden cursor-pointer transform active:scale-[0.98] transition-all border border-orange-400/30">
-                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-10 -mb-10 blur-2xl pointer-events-none"></div>
-                        <div className="flex justify-between items-center mb-6 relative z-10">
-                            <div className="flex items-center gap-2"><div className="p-2 bg-white/20 rounded-xl backdrop-blur-md"><Coins size={18}/></div><span className="font-bold tracking-wide">我的金庫</span></div>
-                            <span className="text-xs font-bold bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">查看詳情 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
-                        </div>
-                        <div className="text-orange-50 text-xs font-bold mb-1 relative z-10">總市值 (TWD)</div>
-                        <div className="text-4xl font-black mb-6 tracking-tight relative z-10">{formatMoney(goldCurrentVal)}</div>
-                        <div className="grid grid-cols-2 gap-4 relative z-10">
-                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">總重量</div><div className="font-bold text-lg flex items-end gap-1">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}<span className="text-xs mb-0.5 opacity-80">錢</span></div></div>
-                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">未實現損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
-                        </div>
-                     </div>
-                 </div>
-             )}
+                 {/* === CALENDAR VIEW === */}
+                 {currentView === 'calendar' && (
+                     <div 
+                         id="calendar-scroll-container"
+                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
+                         onTouchStart={handleTouchStart}
+                         onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
+                     >
+                         <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
+                             {/* Calendar Header */}
+                             <div className="flex justify-between items-center mb-6">
+                                  <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth - 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronLeft size={20}/></button>
+                                  <div className="text-lg font-black text-gray-800 tracking-wide select-none">
+                                      {calendarYear}年 {calendarMonth + 1}月
+                                  </div>
+                                  <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth + 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronRight size={20}/></button>
+                             </div>
+                             
+                             {/* Weekday headers */}
+                             <div className="grid grid-cols-7 gap-1 mb-3 text-center">
+                                 {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>)}
+                             </div>
+                             
+                             {/* Days Grid */}
+                             <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
+                                 {calendarDays.map((day, idx) => {
+                                     if (day === null) return <div key={`empty-${idx}`} />;
+                                     const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                     const isSelected = calendarSelectedDate === dateStr;
+                                     const isToday = dateStr === getLocalYMD();
+                                     const hasInc = calendarDailyData[dateStr]?.hasIncome;
+                                     const hasExp = calendarDailyData[dateStr]?.hasExpense;
 
-             {/* === CALENDAR VIEW === */}
-             {currentView === 'calendar' && (
-                 <div 
-                     className="p-4 space-y-5 animate-[fadeIn_0.3s]"
-                     onTouchStart={handleTouchStart}
-                     onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
-                 >
-                     <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
-                         {/* Calendar Header */}
-                         <div className="flex justify-between items-center mb-6">
-                              <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth - 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronLeft size={20}/></button>
-                              <div className="text-lg font-black text-gray-800 tracking-wide select-none">
-                                  {calendarYear}年 {calendarMonth + 1}月
-                              </div>
-                              <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth + 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronRight size={20}/></button>
+                                     return (
+                                         <div key={dateStr} onClick={() => setCalendarSelectedDate(dateStr)} className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-orange-500 text-white shadow-md shadow-orange-200' : isToday ? 'bg-orange-50 text-orange-800' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                             <span className={`text-sm font-bold ${isSelected ? 'text-white' : ''}`}>{day}</span>
+                                             <div className="flex gap-1 mt-1 h-1.5 justify-center">
+                                                 {hasExp && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-rose-400'}`}></div>}
+                                                 {hasInc && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`}></div>}
+                                             </div>
+                                         </div>
+                                     )
+                                 })}
+                             </div>
                          </div>
-                         
-                         {/* Weekday headers */}
-                         <div className="grid grid-cols-7 gap-1 mb-3 text-center">
-                             {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>)}
-                         </div>
-                         
-                         {/* Days Grid */}
-                         <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
-                             {calendarDays.map((day, idx) => {
-                                 if (day === null) return <div key={`empty-${idx}`} />;
-                                 const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                                 const isSelected = calendarSelectedDate === dateStr;
-                                 const isToday = dateStr === getLocalYMD();
-                                 const hasInc = calendarDailyData[dateStr]?.hasIncome;
-                                 const hasExp = calendarDailyData[dateStr]?.hasExpense;
 
-                                 return (
-                                     <div key={dateStr} onClick={() => setCalendarSelectedDate(dateStr)} className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-orange-500 text-white shadow-md shadow-orange-200' : isToday ? 'bg-orange-50 text-orange-800' : 'text-gray-700 hover:bg-gray-50'}`}>
-                                         <span className={`text-sm font-bold ${isSelected ? 'text-white' : ''}`}>{day}</span>
-                                         <div className="flex gap-1 mt-1 h-1.5 justify-center">
-                                             {hasExp && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-rose-400'}`}></div>}
-                                             {hasInc && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`}></div>}
+                         {/* Selected Day Details */}
+                         <div>
+                             <div className="flex justify-between items-end px-2 mb-3">
+                                 <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+                                     <Calendar size={16} className="text-orange-400"/>
+                                     {calendarSelectedDate.replace(/-/g, '/')} 紀錄
+                                     {selectedDayRecords.length > 1 && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full animate-pulse ml-1 flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
+                                 </div>
+                                 <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">{selectedDayRecords.length} 筆</div>
+                             </div>
+                             
+                             {selectedDayRecords.length === 0 ? (
+                                 <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
+                                     <Coffee size={32} className="opacity-20" />
+                                     當日無收支紀錄
+                                 </div>
+                             ) : (
+                                 <SortableDayGroup 
+                                     list={selectedDayRecords}
+                                     categories={categories}
+                                     onSwap={handleExpenseSwap}
+                                     setEditingExpense={setEditingExpense}
+                                     setShowExpenseAdd={setShowExpenseAdd}
+                                     setExpenseToDelete={setExpenseToDelete}
+                                     scrollContainerId="calendar-scroll-container"
+                                 />
+                             )}
+                         </div>
+                         {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                         <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
+                     </div>
+                 )}
+
+                 {/* === GOLD VIEW === */}
+                 {currentView === 'gold' && (
+                    <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-4 pb-24 animate-[fadeIn_0.3s]">
+                        <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                             <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
+                             <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
+                             <div className="grid grid-cols-2 gap-4">
+                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
+                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
+                             </div>
+                             <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-sm">
+                                 <div className="flex flex-col"><span className="text-orange-100/80 text-[10px] font-bold">購入總成本</span><span className="font-black">{formatMoney(goldTotalCost)}</span></div>
+                                 <div className="flex flex-col text-right"><span className="text-orange-100/80 text-[10px] font-bold">平均成本</span><span className="font-black">{formatMoney(goldAvgCost)}<span className="text-[10px] font-normal"> /克</span></span></div>
+                             </div>
+                        </div>
+                        <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
+                        <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
+                        <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
+                        <div className="space-y-3">
+                            <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
+                            {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
+                             sortedGoldTransactions.map(t => (
+                                 <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
+                                         <div>
+                                             <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
+                                             <div className="text-[10px] text-gray-400 mt-0.5">{t.date} · 成本 {formatMoney(t.totalCost)}</div>
                                          </div>
                                      </div>
-                                 )
-                             })}
-                         </div>
-                     </div>
+                                     <div className="flex items-center gap-3">
+                                        <div className="text-right">
+                                            <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
+                                            <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
+                                        </div>
+                                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
+                                            <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
+                                            <button onClick={() => setGoldToDelete(t)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                        </div>
+                                     </div>
+                                 </div>
+                             ))
+                            }
+                        </div>
+                        {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} initialData={editingGold} showToast={showToast} />}
+                        <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
+                    </div>
+                 )}
 
-                     {/* Selected Day Details */}
-                     <div>
-                         <div className="flex justify-between items-end px-2 mb-3">
-                             <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
-                                 <Calendar size={16} className="text-orange-400"/>
-                                 {calendarSelectedDate.replace(/-/g, '/')} 紀錄
-                                 {selectedDayRecords.length > 1 && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full animate-pulse ml-1 flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
+                 {/* === HISTORY VIEW (Swipeable & Tabs) === */}
+                 {currentView === 'history' && (
+                     <div 
+                         id="history-scroll-container"
+                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
+                         onTouchStart={handleTouchStart}
+                         onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
+                     >
+                         <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
+                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
+                             <div className="text-center select-none">
+                                 <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(currentHistoryDate.toISOString())}</h3>
+                                 <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
                              </div>
-                             <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">{selectedDayRecords.length} 筆</div>
+                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
                          </div>
-                         
-                         {selectedDayRecords.length === 0 ? (
-                             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
-                                 <Coffee size={32} className="opacity-20" />
-                                 當日無收支紀錄
+
+                         <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+                             <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
+                             <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
+                         </div>
+
+                         {currentHistoryRecords.length === 0 ? (
+                             <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
+                                 <History size={40} className="mb-4 opacity-20"/>
+                                 當月無紀錄
                              </div>
                          ) : (
-                             <SortableDayGroup 
-                                 list={selectedDayRecords}
-                                 categories={categories}
-                                 onSwap={handleExpenseSwap}
-                                 setEditingExpense={setEditingExpense}
-                                 setShowExpenseAdd={setShowExpenseAdd}
-                                 setExpenseToDelete={setExpenseToDelete}
-                             />
-                         )}
-                     </div>
-                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
-                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
-                 </div>
-             )}
-
-             {/* === GOLD VIEW === */}
-             {currentView === 'gold' && (
-                <div className="p-4 space-y-4 animate-[fadeIn_0.3s]">
-                    <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
-                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                         <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
-                         <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
-                         <div className="grid grid-cols-2 gap-4">
-                             <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
-                             <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
-                         </div>
-                         <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-sm">
-                             <div className="flex flex-col"><span className="text-orange-100/80 text-[10px] font-bold">購入總成本</span><span className="font-black">{formatMoney(goldTotalCost)}</span></div>
-                             <div className="flex flex-col text-right"><span className="text-orange-100/80 text-[10px] font-bold">平均成本</span><span className="font-black">{formatMoney(goldAvgCost)}<span className="text-[10px] font-normal"> /克</span></span></div>
-                         </div>
-                    </div>
-                    <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
-                    <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
-                    <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
-                    <div className="space-y-3">
-                        <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
-                        {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">尚無紀錄</div> : 
-                         sortedGoldTransactions.map(t => (
-                             <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
-                                 <div className="flex items-center gap-3">
-                                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
-                                     <div>
-                                         <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
-                                         <div className="text-[10px] text-gray-400 mt-0.5">{t.date} · 成本 {formatMoney(t.totalCost)}</div>
-                                     </div>
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                    <div className="text-right">
-                                        <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                        <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
-                                    </div>
-                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                        <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                        <button onClick={() => setGoldToDelete(t)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                    </div>
-                                 </div>
-                             </div>
-                         ))
-                        }
-                    </div>
-                    {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} initialData={editingGold} showToast={showToast} />}
-                    <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
-                </div>
-             )}
-
-             {/* === EXPENSE VIEW === */}
-             {currentView === 'expense' && (
-                <div className="p-4 space-y-5 animate-[fadeIn_0.3s]">
-                    <div className="bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                        <div className="text-center mb-8">
-                             <div className="text-gray-400 text-xs font-bold mb-1 bg-gray-50 inline-block px-3 py-1 rounded-full">{new Date().getMonth()+1}月 總結餘</div>
-                             <div className={`text-4xl mt-2 font-black tracking-tight ${currentMonthStats.balance >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatMoney(currentMonthStats.balance)}</div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-emerald-50 p-4 rounded-3xl border border-emerald-100/50"><div className="flex items-center gap-1 text-emerald-600 text-xs font-bold mb-1"><ArrowLeft size={14}/> 收入</div><div className="font-black text-gray-800 text-xl">{formatMoney(currentMonthStats.income)}</div></div>
-                            <div className="bg-rose-50 p-4 rounded-3xl border border-rose-100/50"><div className="flex items-center gap-1 text-rose-500 text-xs font-bold mb-1">支出 <ArrowRight size={14}/></div><div className="font-black text-gray-800 text-xl">{formatMoney(currentMonthStats.expense)}</div></div>
-                        </div>
-                    </div>
-                    <button onClick={() => { 
-                        if(books.length === 0) return showToast('請先新增帳本', 'error');
-                        setEditingExpense(null); 
-                        setShowExpenseAdd(true); 
-                    }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={20}/> 記一筆</button>
-                    
-                    <div className="space-y-6 pb-10 mt-2">
-                        {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
-                            <div key={idx} className="animate-[fadeIn_0.3s]">
-                                <div className="flex justify-between items-end px-2 mb-3">
-                                    <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
-                                        {formatDate(group.date)}
-                                        {group.list.length > 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full animate-pulse flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
-                                    </div>
-                                    <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">日支 {formatMoney(Math.abs(group.total))}</div>
-                                </div>
-                                <SortableDayGroup 
-                                    list={group.list}
-                                    categories={categories}
-                                    onSwap={handleExpenseSwap}
-                                    setEditingExpense={setEditingExpense}
-                                    setShowExpenseAdd={setShowExpenseAdd}
-                                    setExpenseToDelete={setExpenseToDelete}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                    {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
-                    <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} showToast={showToast} />
-                    <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
-                </div>
-             )}
-
-             {/* === HISTORY VIEW (Swipeable & Tabs) === */}
-             {currentView === 'history' && (
-                 <div 
-                     className="p-4 space-y-5 animate-[fadeIn_0.3s]"
-                     onTouchStart={handleTouchStart}
-                     onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
-                 >
-                     <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
-                         <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
-                         <div className="text-center select-none">
-                             <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(currentHistoryDate.toISOString())}</h3>
-                             <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
-                         </div>
-                         <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
-                     </div>
-
-                     <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
-                         <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
-                         <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
-                     </div>
-
-                     {currentHistoryRecords.length === 0 ? (
-                         <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
-                             <History size={40} className="mb-4 opacity-20"/>
-                             當月無紀錄
-                         </div>
-                     ) : (
-                         <>
-                             {historyTab === 'stats' && (
-                                 <div className="space-y-4 animate-[fadeIn_0.3s]">
-                                     <div className="grid grid-cols-2 gap-3">
-                                         <div className="bg-emerald-50 rounded-[1.5rem] p-5 border border-emerald-100 shadow-sm">
-                                             <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
-                                             <div className="text-2xl font-black text-emerald-700">{formatMoney(historyTotalIncome)}</div>
+                             <>
+                                 {historyTab === 'stats' && (
+                                     <div className="space-y-4 animate-[fadeIn_0.3s]">
+                                         <div className="grid grid-cols-2 gap-3">
+                                             <div className="bg-emerald-50 rounded-[1.5rem] p-5 border border-emerald-100 shadow-sm">
+                                                 <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
+                                                 <div className="text-2xl font-black text-emerald-700">{formatMoney(historyTotalIncome)}</div>
+                                             </div>
+                                             <div className="bg-rose-50 rounded-[1.5rem] p-5 border border-rose-100 shadow-sm">
+                                                 <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
+                                                 <div className="text-2xl font-black text-rose-700">{formatMoney(historyTotalExpense)}</div>
+                                             </div>
                                          </div>
-                                         <div className="bg-rose-50 rounded-[1.5rem] p-5 border border-rose-100 shadow-sm">
-                                             <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
-                                             <div className="text-2xl font-black text-rose-700">{formatMoney(historyTotalExpense)}</div>
-                                         </div>
-                                     </div>
 
-                                     <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
-                                             <PieChart size={16} className="text-purple-400"/> 分類支出排名
-                                         </h4>
-                                         <div className="space-y-4">
-                                             {(() => {
-                                                 const catTotals = {};
-                                                 currentHistoryRecords.forEach(item => {
-                                                     if (item.type === 'expense') {
-                                                         const catId = item.category || 'other';
-                                                         catTotals[catId] = (catTotals[catId] || 0) + (Number(item.amount) || 0);
-                                                     }
-                                                 });
-                                                 const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
-                                                 
-                                                 if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl font-bold">本月無支出</div>;
-                                                 
-                                                 return sortedCats.map(([catId, amount]) => {
-                                                     const cat = categories.find(c => c.id === catId);
-                                                     const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                                     const percent = historyTotalExpense > 0 ? ((amount / historyTotalExpense) * 100).toFixed(1) : 0;
+                                         <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                                 <PieChart size={16} className="text-purple-400"/> 分類支出排名
+                                             </h4>
+                                             <div className="space-y-4">
+                                                 {(() => {
+                                                     const catTotals = {};
+                                                     currentHistoryRecords.forEach(item => {
+                                                         if (item.type === 'expense') {
+                                                             const catId = item.category || 'other';
+                                                             catTotals[catId] = (catTotals[catId] || 0) + (Number(item.amount) || 0);
+                                                         }
+                                                     });
+                                                     const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
                                                      
-                                                     return (
-                                                         <div key={catId} className="flex justify-between items-center group">
-                                                             <div className="flex items-center gap-3">
-                                                                 <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-inner group-hover:bg-purple-50 group-hover:text-purple-500 group-hover:border-purple-100 transition-colors">
-                                                                     <IconComp size={20}/>
+                                                     if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl font-bold">本月無支出</div>;
+                                                     
+                                                     return sortedCats.map(([catId, amount]) => {
+                                                         const cat = categories.find(c => c.id === catId);
+                                                         const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                                         const percent = historyTotalExpense > 0 ? ((amount / historyTotalExpense) * 100).toFixed(1) : 0;
+                                                         
+                                                         return (
+                                                             <div key={catId} className="flex justify-between items-center group">
+                                                                 <div className="flex items-center gap-3">
+                                                                     <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-inner group-hover:bg-purple-50 group-hover:text-purple-500 group-hover:border-purple-100 transition-colors">
+                                                                         <IconComp size={20}/>
+                                                                     </div>
+                                                                     <div>
+                                                                         <div className="text-sm font-black text-gray-700">{cat?.name || '其他'}</div>
+                                                                         <div className="text-[11px] text-gray-400 font-bold mt-0.5">{percent}%</div>
+                                                                     </div>
                                                                  </div>
-                                                                 <div>
-                                                                     <div className="text-sm font-black text-gray-700">{cat?.name || '其他'}</div>
-                                                                     <div className="text-[11px] text-gray-400 font-bold mt-0.5">{percent}%</div>
-                                                                 </div>
+                                                                 <span className="font-black text-lg text-gray-800">{formatMoney(amount)}</span>
                                                              </div>
-                                                             <span className="font-black text-lg text-gray-800">{formatMoney(amount)}</span>
-                                                         </div>
-                                                     )
-                                                 });
-                                             })()}
+                                                         )
+                                                     });
+                                                 })()}
+                                             </div>
                                          </div>
                                      </div>
-                                 </div>
-                             )}
+                                 )}
 
-                             {historyTab === 'list' && (
-                                 <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] overflow-hidden animate-[fadeIn_0.3s]">
-                                     {currentHistoryRecords.map((item, i) => {
-                                          const cat = categories.find(c=>c.id===item.category);
-                                          const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                          return (
-                                             <div key={item.id} className={`p-4 flex justify-between items-center transition-colors ${i !== currentHistoryRecords.length-1 ? 'border-b border-gray-50' : ''}`}>
-                                                 <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                     <div className="text-xs font-bold text-gray-400 w-11 shrink-0 text-center flex flex-col items-center justify-center bg-gray-50 rounded-2xl py-2 border border-gray-100 shadow-inner">
-                                                         <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
-                                                         <div className="text-[8px] uppercase">Day</div>
-                                                     </div>
-                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                        <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="font-black text-gray-800 text-sm truncate">{item.itemName || cat?.name || '其他'}</div>
-                                                            <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1.5">
-                                                                {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
-                                                                <span className="truncate">{item.note || '無備註'}</span>
+                                 {historyTab === 'list' && (
+                                     <div className="space-y-3 animate-[fadeIn_0.3s]">
+                                         {currentHistoryRecords.map((item, i) => {
+                                              const cat = categories.find(c=>c.id===item.category);
+                                              const IconComp = ICON_MAP[cat?.icon] || Tag;
+                                              return (
+                                                 <div key={item.id} className={`h-[88px] px-4 flex justify-between items-center rounded-[1.25rem] bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-colors hover:border-purple-200 w-full`}>
+                                                     <div className="flex items-center gap-4 flex-1 min-w-0 h-full">
+                                                         <div className="text-xs font-bold text-gray-400 w-11 shrink-0 text-center flex flex-col items-center justify-center bg-gray-50 rounded-xl py-2 border border-gray-100 shadow-inner">
+                                                             <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
+                                                             <div className="text-[8px] uppercase">Day</div>
+                                                         </div>
+                                                         <div className="flex items-center gap-3 flex-1 min-w-0 h-full">
+                                                            <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
+                                                            <div className="flex-col justify-center flex-1 min-w-0">
+                                                                <div className="font-black text-gray-800 text-base truncate leading-tight">{item.itemName || cat?.name || '其他'}</div>
+                                                                <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
+                                                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
+                                                                    <span className="truncate">{item.note || '無備註'}</span>
+                                                                </div>
                                                             </div>
+                                                         </div>
+                                                     </div>
+                                                     <div className="flex items-center gap-4 shrink-0 pl-2 h-full">
+                                                        <div className="text-right">
+                                                            <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
+                                                        </div>
+                                                        <div className="flex flex-col gap-2 border-l border-gray-100 pl-3 justify-center h-full">
+                                                            <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
+                                                            <button onClick={() => setExpenseToDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                                                         </div>
                                                      </div>
                                                  </div>
-                                                 <div className="flex items-center gap-3 shrink-0 pl-2">
-                                                    <div className="text-right">
-                                                        <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                                        <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
-                                                        <button onClick={() => setExpenseToDelete(item)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                                    </div>
-                                                 </div>
-                                             </div>
-                                         )
-                                     })}
-                                 </div>
-                             )}
-                         </>
-                     )}
-                     {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
-                     <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
-                 </div>
-             )}
+                                             )
+                                         })}
+                                     </div>
+                                 )}
+                             </>
+                         )}
+                         {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
+                         <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
+                     </div>
+                 )}
 
-             {/* === CATEGORY MANAGER VIEW === */}
-             {currentView === 'categories' && (
-                 <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
-             )}
+                 {/* === CATEGORY MANAGER VIEW === */}
+                 {currentView === 'categories' && (
+                     <div id="categories-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-24">
+                         <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
+                     </div>
+                 )}
 
-             {/* === BACKUP & RESTORE VIEW === */}
-             {currentView === 'backup' && (
-                 <BackupRestoreView 
-                     goldTransactions={goldTransactions} 
-                     books={books} 
-                     allExpenses={allExpenses} 
-                     categories={categories} 
-                     user={user} 
-                     appId={appId} 
-                     db={db} 
-                     showToast={showToast}
-                 />
-             )}
+                 {/* === BACKUP & RESTORE VIEW === */}
+                 {currentView === 'backup' && (
+                     <div id="backup-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-24">
+                         <BackupRestoreView 
+                             goldTransactions={goldTransactions} 
+                             books={books} 
+                             allExpenses={allExpenses} 
+                             categories={categories} 
+                             user={user} 
+                             appId={appId} 
+                             db={db} 
+                             showToast={showToast}
+                         />
+                     </div>
+                 )}
+             </div>
         </div>
     );
 }
