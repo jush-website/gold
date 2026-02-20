@@ -465,6 +465,8 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
         }
     }, [type, categories]);
 
+    // 新增：明細名稱狀態
+    const [itemName, setItemName] = useState(initialData?.itemName || '');
     const [note, setNote] = useState(initialData?.note || '');
     const [showKeypad, setShowKeypad] = useState(false);
 
@@ -477,7 +479,8 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
             showToast("請選擇分類", "error");
             return;
         }
-        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, note, type, bookId });
+        // 修正：將 itemName 一併送出儲存
+        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, itemName, note, type, bookId });
     };
 
     return (
@@ -510,6 +513,8 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                             {availableCats.length === 0 && <div className="col-span-4 text-center text-gray-400 text-xs py-4">尚無此類型分類，請至「分類管理」新增。</div>}
                         </div>
                     </div>
+                    {/* 新增：明細名稱輸入框 */}
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">明細名稱</label><input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="例如：拿鐵、衛生紙..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
                     {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '儲存修改' : '確認記帳'}</button></div>)}
                 </div>
@@ -1552,7 +1557,15 @@ export default function App() {
                                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
                                                         <IconComp size={20}/>
                                                     </div>
-                                                    <div><div className="font-black text-gray-800 text-base">{cat?.name || '其他'}</div><div className="text-xs text-gray-400 max-w-[150px] truncate mt-0.5">{item.note || '無備註'}</div></div>
+                                                    <div>
+                                                        {/* 修正：優先顯示明細名稱，若無則顯示分類 */}
+                                                        <div className="font-black text-gray-800 text-base">{item.itemName || cat?.name || '其他'}</div>
+                                                        <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                                                            {/* 若有填寫明細名稱，則顯示分類小標籤 */}
+                                                            {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{cat?.name || '其他'}</span>}
+                                                            <span className="max-w-[120px] truncate">{item.note || '無備註'}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <div className={`font-black text-lg text-right ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
@@ -1675,8 +1688,12 @@ export default function App() {
                                                      <div className="flex items-center gap-3">
                                                         <div className={`p-2 rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
                                                         <div>
-                                                            <div className="font-black text-gray-800 text-sm">{cat?.name || '其他'}</div>
-                                                            <div className="text-[10px] text-gray-400 max-w-[120px] truncate mt-0.5">{item.note || '無備註'}</div>
+                                                            {/* 修正：在歷史紀錄也同步新的明細顯示邏輯 */}
+                                                            <div className="font-black text-gray-800 text-sm">{item.itemName || cat?.name || '其他'}</div>
+                                                            <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1.5">
+                                                                {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold">{cat?.name || '其他'}</span>}
+                                                                <span className="max-w-[100px] truncate">{item.note || '無備註'}</span>
+                                                            </div>
                                                         </div>
                                                      </div>
                                                  </div>
