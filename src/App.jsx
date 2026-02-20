@@ -2,12 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
-  deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy, setDoc
+  deleteDoc, doc, updateDoc, setDoc
 } from 'firebase/firestore';
 import { 
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-  getRedirectResult, signInWithRedirect
+  getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut
 } from 'firebase/auth';
 import { 
   Coins, TrendingUp, TrendingDown, RefreshCcw, Scale, 
@@ -33,37 +31,6 @@ const ICON_MAP = {
     'dumbbell': Dumbbell, 'heart': Heart, 'zap': Zap, 'scissors': Scissors,
     'briefcase': Briefcase
 };
-
-// --- Firebase Configuration Management ---
-const STORAGE_KEY = 'firebase_config_v1';
-const defaultConfig = {
-  apiKey: "", 
-  authDomain: "gold-29c1b.firebaseapp.com",
-  projectId: "gold-29c1b",
-  storageBucket: "gold-29c1b.firebasestorage.app",
-  messagingSenderId: "867971422713",
-  appId: "1:867971422713:web:f85ecab4f9374cdbc7c528",
-  measurementId: "G-BNBRLYFBCX"
-};
-
-let firebaseConfig = { ...defaultConfig };
-let isEnvConfigured = false;
-try {
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
-        firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-        isEnvConfigured = true;
-    }
-} catch (e) {}
-
-if (!isEnvConfigured) {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.apiKey) firebaseConfig = parsed;
-        }
-    } catch (e) {}
-}
 
 // --- Helper Functions ---
 const formatMoney = (amount, currency = 'TWD') => {
@@ -91,22 +58,11 @@ const formatMonth = (dateString) => {
     return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
 };
 
-// --- Firebase Init ---
-let app, auth, db, googleProvider;
-const isConfigured = !!firebaseConfig.apiKey; 
-
-if (isConfigured) {
-    try { 
-        app = initializeApp(firebaseConfig); 
-        auth = getAuth(app);
-        db = getFirestore(app);
-        googleProvider = new GoogleAuthProvider();
-    } catch (e) {
-        console.error("Firebase Init Error:", e);
-        if (!isEnvConfigured) localStorage.removeItem(STORAGE_KEY);
-    }
-}
-
+// --- Firebase Init (Canvas Standard) ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v1';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
@@ -147,90 +103,9 @@ const AppLoading = () => (
   <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', color: 'white' }}>
     <div className="relative"><div className="w-16 h-16 border-4 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin"></div><div className="absolute inset-0 flex items-center justify-center"><Coins size={24} className="text-yellow-500" /></div></div>
     <h2 className="mt-4 text-xl font-bold tracking-wider text-yellow-500" style={{fontFamily: 'sans-serif'}}>我的記帳本</h2>
-    <p className="text-gray-400 text-sm mt-2">載入您的資產數據...</p>
+    <p className="text-gray-400 text-sm mt-2">載入並驗證您的身分...</p>
   </div>
 );
-
-const ConfigScreen = () => {
-    const [key, setKey] = useState('');
-    const [saving, setSaving] = useState(false);
-    const handleSave = () => {
-        if (!key.trim()) return;
-        setSaving(true);
-        const newConfig = { ...defaultConfig, apiKey: key.trim() };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
-        setTimeout(() => window.location.reload(), 500);
-    };
-    return (
-        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 text-white">
-            <div className="w-full max-w-md bg-gray-800 p-8 rounded-3xl border border-gray-700 shadow-2xl">
-                <div className="flex items-center gap-3 mb-6 text-yellow-500"><div className="p-3 bg-yellow-500/10 rounded-xl"><Settings size={24}/></div><h1 className="text-xl font-bold">系統設定</h1></div>
-                <p className="text-gray-400 mb-6 text-sm leading-relaxed">在您的本地環境中，系統會自動讀取 <code>.env</code> 變數。<br/><br/>但在目前的預覽環境中無法讀取環境變數，請手動輸入 Firebase API Key 以啟動系統。</p>
-                <div className="space-y-4">
-                    <div><label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Project ID</label><div className="bg-gray-900/50 p-3 rounded-xl text-gray-400 font-mono text-sm border border-gray-700">{defaultConfig.projectId}</div></div>
-                    <div><label className="text-xs font-bold text-blue-400 uppercase mb-2 block flex items-center gap-1"><Key size={12}/> Firebase API Key</label><input type="text" value={key} onChange={(e) => setKey(e.target.value)} placeholder="貼上您的 API Key" className="w-full bg-gray-900 p-3 rounded-xl border border-gray-600 focus:border-blue-500 outline-none font-mono text-sm transition-colors"/></div>
-                </div>
-                <button onClick={handleSave} disabled={!key || saving} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">{saving ? <Loader2 className="animate-spin" size={20}/> : '儲存並啟動'}</button>
-            </div>
-        </div>
-    );
-};
-
-const LoginView = () => {
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const isInAppBrowser = /Line|FBAN|FBAV|Instagram|WeChat/i.test(navigator.userAgent);
-
-    const handleGoogleLogin = async () => {
-        if (isInAppBrowser) {
-            setError('請點擊右上角或右下角選單，選擇「以 Safari / Chrome 開啟」後再登入。');
-            return;
-        }
-        setLoading(true); setError('');
-        try { 
-            await signInWithPopup(auth, googleProvider); 
-        } catch (err) { 
-            if (err.code === 'auth/popup-closed-by-user') {
-                setError('您取消了登入，請再試一次。');
-            } else if (err.code === 'auth/missing-initial-state' || err.message.includes('missing initial state')) {
-                setError('瀏覽器安全限制阻擋了登入。請點擊下方的「重新導向模式」登入，或將網頁加入主畫面。');
-            } else {
-                setError(`登入失敗: ${err.message}`); 
-            }
-            setLoading(false); 
-        }
-    };
-
-    const handleRedirectLogin = async () => {
-        setLoading(true); setError('');
-        try { await signInWithRedirect(auth, googleProvider); } 
-        catch (err) { setError(`導向登入失敗: ${err.message}`); setLoading(false); }
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{backgroundColor: '#111827'}}>
-             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"></div>
-             <div className="relative z-10 w-full max-w-md bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 p-8 rounded-3xl shadow-2xl text-center">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20 transform rotate-3"><Wallet size={40} className="text-white" /></div>
-                <h1 className="text-3xl font-black text-white mb-2">我的記帳本</h1><p className="text-gray-400 mb-8">黃金投資 • 生活記帳 • 財務自由</p>
-                
-                {isInAppBrowser && (
-                    <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2">
-                        <AlertCircle size={16} className="shrink-0 mt-0.5"/>
-                        <span>偵測到您使用社群軟體內建瀏覽器，這會阻擋登入。請點擊選單選擇<strong>「以 Safari / Chrome 開啟」</strong>。</span>
-                    </div>
-                )}
-
-                {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl mb-4 text-xs text-left flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5"/><span>{error}</span></div>}
-                
-                <button onClick={handleGoogleLogin} disabled={loading} className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl mb-3 flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg">{loading ? <Loader2 className="animate-spin"/> : <User size={20}/>} 使用 Google 登入</button>
-                <button onClick={handleRedirectLogin} disabled={loading} className="mt-2 mb-6 text-[11px] text-gray-400 hover:text-gray-200 underline py-2 transition-colors">登入沒反應？改用「重新導向」模式登入</button>
-                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500"><ShieldCheck size={14} /><span>Google 安全驗證 • 資料加密儲存</span></div>
-                {!isEnvConfigured && <button onClick={() => { localStorage.removeItem(STORAGE_KEY); window.location.reload(); }} className="mt-4 text-[10px] text-gray-600 hover:text-gray-400 underline">重設預覽 API Key</button>}
-            </div>
-        </div>
-    );
-};
 
 // --- GOLD COMPONENTS ---
 const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod }) => {
@@ -609,30 +484,20 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
 
 // --- NEW CATEGORY MODAL ---
 const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast }) => {
-    // 強制同步傳入的初始資料，避免舊的閉包狀態殘留導致新增/修改錯亂
+    // 強制綁定從外部傳入的 ID，這是解決編輯變新增的關鍵！
+    const editingId = initialData?.id; 
+
     const [name, setName] = useState(initialData?.name || '');
     const [type, setType] = useState(initialData?.type || defaultType);
     const [icon, setIcon] = useState(initialData?.icon || (type === 'expense' ? 'shopping-bag' : 'wallet'));
-
-    useEffect(() => {
-        if (initialData) {
-            setName(initialData.name || '');
-            setType(initialData.type || defaultType);
-            setIcon(initialData.icon || (initialData.type === 'expense' ? 'shopping-bag' : 'wallet'));
-        } else {
-            setName('');
-            setType(defaultType);
-            setIcon(defaultType === 'expense' ? 'shopping-bag' : 'wallet');
-        }
-    }, [initialData, defaultType]);
 
     const handleSubmit = () => {
         if (!name.trim()) {
             showToast("請輸入分類名稱", "error");
             return;
         }
-        // 將舊有 id 一併傳出，以便更新 (如果是新增，initialData 會是 null)
-        onSave({ id: initialData?.id, name: name.trim(), icon, type });
+        // 將舊有 id 一併傳出，以便更新 (如果是新增，editingId 會是 undefined)
+        onSave({ id: editingId, name: name.trim(), icon, type });
         onClose();
     };
 
@@ -669,7 +534,7 @@ const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast })
 
                     <div className="pt-2">
                         <button onClick={handleSubmit} className={`w-full py-4 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-transform text-lg ${type==='expense'?'bg-red-500 shadow-red-200 hover:bg-red-600':'bg-green-500 shadow-green-200 hover:bg-green-600'}`}>
-                            {initialData ? '儲存修改' : '確認新增'}
+                            {editingId ? '儲存修改' : '確認新增'}
                         </button>
                     </div>
                 </div>
@@ -743,7 +608,16 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
             </button>
 
             {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
-            <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
+            <ConfirmModal 
+                isOpen={!!showDeleteConfirm} 
+                title="刪除分類" 
+                message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} 
+                onConfirm={() => { 
+                    if(showDeleteConfirm?.id) onDelete(showDeleteConfirm.id); 
+                    setShowDeleteConfirm(null); 
+                }} 
+                onCancel={() => setShowDeleteConfirm(null)} 
+            />
         </div>
     );
 };
@@ -865,7 +739,7 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
                 <div className="p-6 flex-1">
                     <div className="flex items-center gap-3 mb-10 mt-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-xl border border-white/10">{user?.displayName?.[0] || 'U'}</div>
-                        <div><div className="font-bold text-sm tracking-wide">{user?.displayName}</div><div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div></div>
+                        <div><div className="font-bold text-sm tracking-wide">{user?.displayName || '用戶'}</div><div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div></div>
                     </div>
                     
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
@@ -960,158 +834,82 @@ export default function App() {
     const [goldToDelete, setGoldToDelete] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
 
+    // --- 安全認證初始化 ---
     useEffect(() => {
-        if (!document.getElementById('tailwind-script')) {
-            const script = document.createElement('script');
-            script.id = 'tailwind-script';
-            script.src = "https://cdn.tailwindcss.com";
-            script.async = true;
-            document.head.appendChild(script);
-        }
-    }, []);
-
-    // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
-    useEffect(() => {
-        const metaTags = [
-            { name: 'theme-color', content: '#f9fafb' }, 
-            { name: 'apple-mobile-web-app-capable', content: 'yes' }, 
-            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, 
-            { name: 'apple-mobile-web-app-title', content: '我的記帳本' }, 
-            { name: 'mobile-web-app-capable', content: 'yes' } 
-        ];
-
-        metaTags.forEach(({ name, content }) => {
-            let meta = document.querySelector(`meta[name="${name}"]`);
-            if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = name;
-                document.head.appendChild(meta);
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth init error:", err);
+                setLoading(false);
             }
-            meta.content = content;
-        });
-
-        const absoluteIconUrl = window.location.origin + "/gold.png";
-
-        const manifest = {
-            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
-            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
-            icons: [{
-                src: absoluteIconUrl,
-                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
-            }]
         };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(manifestBlob);
-        
-        let link = document.querySelector('link[rel="manifest"]');
-        if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
-        link.href = manifestUrl;
-
-        let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (!appleIcon) { 
-            appleIcon = document.createElement('link'); 
-            appleIcon.rel = 'apple-touch-icon'; 
-            appleIcon.href = absoluteIconUrl; 
-            document.head.appendChild(appleIcon); 
-        }
-
-        const userAgent = window.navigator.userAgent.toLowerCase();
-        const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-        const isAndroidDevice = /android/.test(userAgent);
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
-        
-        setIsIOS(isIOSDevice);
-
-        if (!isStandalone && (isIOSDevice || isAndroidDevice)) {
-            setShowInstallBtn(true);
-        }
-
-        const handleBeforeInstallPrompt = (e) => {
-            e.preventDefault();
-            setDeferredPrompt(e);
-            if (!isStandalone) setShowInstallBtn(true);
-        };
-
-        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        return () => {
-            URL.revokeObjectURL(manifestUrl);
-            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        };
-    }, []);
-
-    const handleInstallClick = async () => {
-        if (isIOS) {
-            setShowIOSPrompt(true);
-        } else if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-                setDeferredPrompt(null);
-                setShowInstallBtn(false);
-            }
-        } else {
-            setShowAndroidPrompt(true);
-        }
-    };
-
-    useEffect(() => {
-        if (!isConfigured) return; 
-        
-        getRedirectResult(auth).catch((error) => {
-            console.error("Redirect login error:", error);
-        });
+        initAuth();
 
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
-            if(u) fetchGoldPrice();
+            if (u) fetchGoldPrice();
             setLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
+    // --- 資料同步：遵守沒有複合查詢的規則 ---
     useEffect(() => {
-        if (!user || !isConfigured) return;
+        if (!user) return;
 
-        const goldQ = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), orderBy('date', 'desc'));
-        const unsubGold = onSnapshot(goldQ, (snap) => setGoldTransactions(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+        // 黃金同步
+        const goldRef = collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions');
+        const unsubGold = onSnapshot(goldRef, (snap) => {
+            const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            data.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)); // Local Sort
+            setGoldTransactions(data);
+        }, (err) => console.error("Gold Snapshot Error:", err));
 
+        // 帳本同步
         const booksRef = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books');
-        const unsubBooks = onSnapshot(query(booksRef, orderBy('createdAt', 'desc')), (snap) => {
-            const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
+        const unsubBooks = onSnapshot(booksRef, (snap) => {
+            const b = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            b.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // Local Sort
             setBooks(b);
             if (b.length > 0) {
-                if (!currentBookId || !b.find(book => book.id === currentBookId)) setCurrentBookId(b[0].id);
-            } else if (currentBookId) {
+                setCurrentBookId(prev => (prev && b.find(book => book.id === prev)) ? prev : b[0].id);
+            } else {
                 setCurrentBookId(null);
             }
-        });
+        }, (err) => console.error("Books Snapshot Error:", err));
 
+        // 分類同步
         const catRef = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories');
-        const unsubCat = onSnapshot(query(catRef, orderBy('createdAt', 'asc')), (snap) => {
+        const unsubCat = onSnapshot(catRef, (snap) => {
             if (snap.empty) {
                 const defaults = [
                     { name: '餐飲', icon: 'utensils', type: 'expense' }, { name: '日常', icon: 'home', type: 'expense' },
                     { name: '網購', icon: 'shopping-cart', type: 'expense' }, { name: '交通', icon: 'bus', type: 'expense' },
                     { name: '薪水', icon: 'wallet', type: 'income' }, { name: '獎金', icon: 'gift', type: 'income' }
                 ];
-                defaults.forEach(c => addDoc(catRef, { ...c, createdAt: serverTimestamp() }).catch(e=>console.error(e)));
+                defaults.forEach(c => addDoc(catRef, { ...c, createdAt: Date.now() }).catch(e=>console.error(e)));
             } else {
-                setCategories(snap.docs.map(d => ({id:d.id, ...d.data()})));
+                const data = snap.docs.map(d => ({id:d.id, ...d.data()}));
+                data.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)); // Local Sort
+                setCategories(data);
             }
-        });
+        }, (err) => console.error("Categories Snapshot Error:", err));
 
-        return () => { unsubGold(); unsubBooks(); unsubCat(); };
+        // 交易同步
+        const expRef = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions');
+        const unsubExp = onSnapshot(expRef, (snap) => {
+            const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            data.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)); // Local Sort
+            setAllExpenses(data);
+        }, (err) => console.error("Expenses Snapshot Error:", err));
+
+        return () => { unsubGold(); unsubBooks(); unsubCat(); unsubExp(); };
     }, [user]);
-
-    useEffect(() => {
-        if (!user || !isConfigured) return;
-        const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), orderBy('date', 'desc'));
-        const unsub = onSnapshot(q, (snap) => {
-            setAllExpenses(snap.docs.map(d => ({id:d.id, ...d.data()})));
-        });
-        return () => unsub();
-    }, [user, isConfigured]);
 
     // 所有跟隨特定帳本的資料
     const expenses = useMemo(() => {
@@ -1122,14 +920,6 @@ export default function App() {
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
         try {
-            const response = await fetch('/api/gold').catch(e => null);
-            if (response && response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setGoldPrice(data.currentPrice); setGoldHistory(data.history || []); setGoldIntraday(data.intraday || []);
-                    setPriceLoading(false); return;
-                }
-            }
             const yahooGold = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo')).then(r => r.json());
             const yahooTwd = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=1d')).then(r => r.json());
             if (yahooGold.chart.result && yahooTwd.chart.result) {
@@ -1151,11 +941,11 @@ export default function App() {
         try {
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id)), { ...payload, updatedAt: Date.now() });
                 showToast("修改黃金紀錄成功");
             } else {
                 const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), { ...payload, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), { ...payload, createdAt: Date.now() });
                 showToast("新增黃金紀錄成功");
             }
             setShowGoldAdd(false); setEditingGold(null);
@@ -1175,11 +965,11 @@ export default function App() {
         try {
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)), { ...payload, updatedAt: Date.now() });
                 showToast("帳本名稱已更新");
             } else {
                 const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...payload, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...payload, createdAt: Date.now() });
                 showToast("新增帳本成功");
             }
         } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
@@ -1202,11 +992,11 @@ export default function App() {
         try {
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)), { ...payload, updatedAt: Date.now() });
                 showToast("修改記帳紀錄成功");
             } else {
                 const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), { ...payload, createdAt: serverTimestamp() });
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), { ...payload, createdAt: Date.now() });
                 showToast("新增記帳成功");
             }
             setShowExpenseAdd(false); setEditingExpense(null);
@@ -1226,11 +1016,11 @@ export default function App() {
         try {
             if (data.id) {
                 const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: Date.now() });
                 showToast("分類修改成功");
             } else { 
                 const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...payload, createdAt: serverTimestamp() }); 
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...payload, createdAt: Date.now() }); 
                 showToast("新增分類成功");
             }
         } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
@@ -1346,9 +1136,7 @@ export default function App() {
         setTouchStartY(null);
     };
 
-    if (!isConfigured) return <ConfigScreen />;
     if (loading) return <AppLoading />;
-    if (!user) return <LoginView />;
 
     const currentBook = books.find(b => b.id === currentBookId);
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'history':'歷史紀錄', 'categories':'分類管理', 'backup':'備份與還原' };
@@ -1362,12 +1150,10 @@ export default function App() {
                  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
              `}</style>
              
-             {/* 全域 Toast 提示 */}
              <Toast message={toast.message} type={toast.type} />
 
              <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
-             {/* TOP NAVIGATION BAR */}
              <div className="bg-white sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
                 <div className="w-[80px] flex items-center">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
@@ -1391,12 +1177,6 @@ export default function App() {
                 </div>
 
                 <div className="w-[80px] flex justify-end gap-1 items-center">
-                    {showInstallBtn && (
-                        <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 w-8 h-8 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform mr-1" title="下載 APP">
-                            <Download size={16}/>
-                        </button>
-                    )}
-                    {/* 右側返回按鈕 */}
                     {historyStack.length > 1 && (
                         <button onClick={goBack} className="p-2 -mr-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center">
                             <Undo2 size={24}/>
@@ -1404,9 +1184,6 @@ export default function App() {
                     )}
                 </div>
              </div>
-
-             {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
-             {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
 
              {/* === HOME DASHBOARD VIEW === */}
              {currentView === 'home' && (
@@ -1691,7 +1468,7 @@ export default function App() {
                                                     </div>
                                                  </div>
                                              </div>
-                                         )
+                                          )
                                      })}
                                  </div>
                              )}
