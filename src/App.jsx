@@ -888,82 +888,89 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, u
     );
 };
 
-// --- 長按拖曳排序模組 (Sortable Day Group) ---
+// --- 全新設計的長按拖曳排序模組 (無跳動版) ---
 const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete }) => {
     const [draggingId, setDraggingId] = useState(null);
-    const [hoverId, setHoverId] = useState(null);
+    const [currentList, setCurrentList] = useState(list);
     const startY = useRef(0);
     const pressTimer = useRef(null);
 
-    // 拖曳時防止畫面滾動
+    // 拖曳狀態未啟動時，確保畫面與資料庫同步
     useEffect(() => {
+        if (!draggingId) setCurrentList(list);
+    }, [list, draggingId]);
+
+    // 防止在手機上拖曳時，整個網頁跟著滑動
+    useEffect(() => {
+        const preventScroll = (e) => { if (draggingId) e.preventDefault(); };
         if (draggingId) {
             document.body.style.overflow = 'hidden';
-            document.body.style.touchAction = 'none';
+            window.addEventListener('touchmove', preventScroll, { passive: false });
         } else {
             document.body.style.overflow = '';
-            document.body.style.touchAction = '';
         }
         return () => {
             document.body.style.overflow = '';
-            document.body.style.touchAction = '';
-        }
+            window.removeEventListener('touchmove', preventScroll);
+        };
     }, [draggingId]);
 
     const handlePointerStart = (e, item) => {
-        startY.current = e.touches ? e.touches[0].clientY : e.clientY;
+        const y = e.touches ? e.touches[0].clientY : e.clientY;
+        startY.current = y;
         pressTimer.current = setTimeout(() => {
             setDraggingId(item.id);
-            setHoverId(item.id);
-            if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
-        }, 400); // 長按 0.4 秒觸發
+            if (navigator.vibrate) navigator.vibrate(50); // 手機短震動回饋
+        }, 400); // 長按 0.4 秒才啟動拖曳
     };
 
     const handlePointerMove = (e) => {
         if (!draggingId) {
-            const currentY = e.touches ? e.touches[0].clientY : e.clientY;
-            // 如果在長按判定前就滑動超過 10px，取消長按判定 (視為一般滾動網頁)
-            if (Math.abs(currentY - startY.current) > 10) {
-                clearTimeout(pressTimer.current);
-            }
+            // 如果還沒滿足長按時間就滑動，取消長按判定
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            if (Math.abs(y - startY.current) > 10) clearTimeout(pressTimer.current);
             return;
         }
-        
+
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        
         const elem = document.elementFromPoint(clientX, clientY);
         const dropItem = elem?.closest('.sortable-item');
+
         if (dropItem) {
             const targetId = dropItem.getAttribute('data-id');
-            if (targetId && targetId !== hoverId) {
-                setHoverId(targetId);
+            // 只有當碰觸到「不同」的項目時，才在背景更新陣列排序 (這徹底解決了無限跳動的 Bug)
+            if (targetId && targetId !== draggingId) {
+                setCurrentList(prev => {
+                    const dragIdx = prev.findIndex(i => i.id === draggingId);
+                    const targetIdx = prev.findIndex(i => i.id === targetId);
+                    if (dragIdx !== -1 && targetIdx !== -1) {
+                        const newArr = [...prev];
+                        const [moved] = newArr.splice(dragIdx, 1);
+                        newArr.splice(targetIdx, 0, moved);
+                        return newArr;
+                    }
+                    return prev;
+                });
             }
         }
     };
 
     const handlePointerEnd = () => {
         clearTimeout(pressTimer.current);
-        if (draggingId && hoverId && draggingId !== hoverId) {
-            const item1 = list.find(i => i.id === draggingId);
-            const item2 = list.find(i => i.id === hoverId);
-            if (item1 && item2) onSwap(item1, item2);
-        }
-        setDraggingId(null);
-        setHoverId(null);
-    };
+        if (draggingId) {
+            const originalIndex = list.findIndex(i => i.id === draggingId);
+            const newIndex = currentList.findIndex(i => i.id === draggingId);
 
-    // 產生即時交換視覺效果
-    let displayList = [...list];
-    if (draggingId && hoverId && draggingId !== hoverId) {
-        const idx1 = displayList.findIndex(i => i.id === draggingId);
-        const idx2 = displayList.findIndex(i => i.id === hoverId);
-        if (idx1 !== -1 && idx2 !== -1) {
-            const temp = displayList[idx1];
-            displayList[idx1] = displayList[idx2];
-            displayList[idx2] = temp;
+            // 如果放開手指時，位置真的改變了，我們就把這兩筆紀錄的時間戳「互換」
+            if (originalIndex !== -1 && newIndex !== -1 && originalIndex !== newIndex) {
+                const item1 = list[originalIndex];
+                const item2 = list[newIndex];
+                if (item1 && item2) onSwap(item1, item2);
+            }
+            setDraggingId(null);
         }
-    }
+    };
 
     return (
         <div 
@@ -974,7 +981,7 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
             onMouseUp={handlePointerEnd}
             onMouseLeave={handlePointerEnd}
         >
-            {displayList.map((item, i) => {
+            {currentList.map((item, i) => {
                 const cat = categories.find(c=>c.id===item.category);
                 const IconComp = ICON_MAP[cat?.icon] || Tag;
                 const isDraggingThis = item.id === draggingId;
@@ -983,13 +990,13 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                     <div 
                         key={item.id} 
                         data-id={item.id}
-                        className={`sortable-item p-4 flex justify-between items-center transition-all duration-200 
-                            ${i !== displayList.length-1 ? 'border-b border-gray-50' : ''} 
-                            ${isDraggingThis ? 'opacity-50 scale-[0.98] bg-orange-50/50 z-10 shadow-inner' : 'bg-white'}
+                        className={`sortable-item p-4 flex justify-between items-center transition-all duration-300 
+                            ${i !== currentList.length-1 ? 'border-b border-gray-50' : ''} 
+                            ${isDraggingThis ? 'scale-[1.03] bg-orange-50/90 shadow-[0_10px_30px_rgba(0,0,0,0.1)] z-20 relative ring-2 ring-orange-400' : 'bg-white z-0 relative'}
                         `}
                         onTouchStart={(e) => handlePointerStart(e, item)}
                         onMouseDown={(e) => handlePointerStart(e, item)}
-                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: draggingId ? 'none' : 'auto' }}
                     >
                         <div className="flex items-center gap-4 pointer-events-none">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}>
@@ -1007,7 +1014,6 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                             <div className={`font-black text-lg text-right pointer-events-none ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>
                                 {item.type==='income'?'+':''}{formatMoney(item.amount)}
                             </div>
-                            {/* 防止點擊按鈕時觸發拖曳 */}
                             <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
                                 <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={14}/></button>
                                 <button onMouseDown={(e)=>e.stopPropagation()} onTouchStart={(e)=>e.stopPropagation()} onClick={() => setExpenseToDelete(item)} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
@@ -1040,7 +1046,6 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
 
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">資料與設定</div>
                     <div className="space-y-2">
-                        {/* 新增收支日曆到側邊欄 */}
                         <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
                         <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
                         <button onClick={() => { navigateTo('categories'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'categories' ? 'bg-pink-500/20 text-pink-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Tag size={20} /> <span className="font-bold">分類管理</span></button>
