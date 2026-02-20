@@ -465,7 +465,6 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
         }
     }, [type, categories]);
 
-    // 新增：明細名稱狀態
     const [itemName, setItemName] = useState(initialData?.itemName || '');
     const [note, setNote] = useState(initialData?.note || '');
     const [showKeypad, setShowKeypad] = useState(false);
@@ -479,46 +478,70 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
             showToast("請選擇分類", "error");
             return;
         }
-        // 修正：將 itemName 一併送出儲存
         onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, itemName, note, type, bookId });
     };
 
     return (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+             {/* 修正：將最大高度設定為 95vh 確保各種手機畫面都能顯示 */}
+             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+                <div className="p-3 border-b border-gray-100 flex justify-between items-center">
                     <div className="flex bg-gray-100 rounded-lg p-1">
                         <button onClick={()=>setType('expense')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type==='expense'?'bg-white text-red-500 shadow-sm':'text-gray-400'}`}>支出</button>
                         <button onClick={()=>setType('income')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type==='income'?'bg-white text-green-500 shadow-sm':'text-gray-400'}`}>收入</button>
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                <div className="p-5 space-y-5 overflow-y-auto pb-32 sm:pb-5">
-                    <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-6 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
-                         <div className="text-xs font-bold opacity-60 mb-1">金額</div>
-                         <div className="text-4xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={16} className="opacity-30 ml-2"/></div>
+                {/* 修正：縮減內距 (p-4) 與垂直間距 (space-y-3) */}
+                <div className="p-4 space-y-3 overflow-y-auto pb-8">
+                    {/* 修正：金額區塊的留白縮小 (py-3)，字體稍微縮小 */}
+                    <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-3 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
+                         <div className="text-[10px] font-bold opacity-60 mb-0.5">金額</div>
+                         <div className="text-3xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={14} className="opacity-30 ml-2"/></div>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">日期</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent w-full font-bold outline-none"/></div>
+                    
+                    {/* 修正：將日期改為緊湊的橫向排列 */}
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">日期</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent flex-1 font-bold outline-none text-sm text-gray-800"/>
+                    </div>
+
                     <div>
-                        <label className="text-xs font-bold text-gray-400 mb-2 block">分類</label>
-                        <div className="grid grid-cols-4 gap-2">
+                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">分類</label>
+                        {/* 修正：縮小分類按鈕內距，讓畫面更精實 */}
+                        <div className="grid grid-cols-4 gap-1.5">
                             {availableCats.map(c => {
                                 const Icon = ICON_MAP[c.icon] || Tag;
                                 return (
-                                    <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${category===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
-                                        <Icon size={24} className="mb-1.5"/><span className="text-[10px] font-bold">{c.name}</span>
+                                    <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all ${category===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
+                                        <Icon size={20} className="mb-1"/>
+                                        <span className="text-[10px] font-bold truncate w-full px-1 text-center">{c.name}</span>
                                     </button>
                                 );
                             })}
-                            {availableCats.length === 0 && <div className="col-span-4 text-center text-gray-400 text-xs py-4">尚無此類型分類，請至「分類管理」新增。</div>}
+                            {availableCats.length === 0 && <div className="col-span-4 text-center text-gray-400 text-xs py-2">無分類，請至「分類管理」新增</div>}
                         </div>
                     </div>
-                    {/* 新增：明細名稱輸入框 */}
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">明細名稱</label><input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="填入明細" className="bg-transparent w-full text-sm font-bold outline-none"/></div>
-                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400 mb-1 block">備註</label><input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent w-full text-sm font-bold outline-none"/></div>
-                    {!showKeypad && (<div className="pt-2 space-y-3"><button onClick={handleSubmit} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-lg">{initialData ? '儲存修改' : '確認記帳'}</button></div>)}
+
+                    {/* 修正：將明細與備註改為緊湊的橫向排列 */}
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">明細</label>
+                        <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="如：拿鐵..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
+                    </div>
+                    
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">備註</label>
+                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
+                    </div>
+
+                    {!showKeypad && (
+                        <div className="pt-1">
+                            <button onClick={handleSubmit} className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-base">{initialData ? '儲存修改' : '確認記帳'}</button>
+                        </div>
+                    )}
                 </div>
              </div>
+             {/* 修正：保持數字鍵盤不影響彈窗本體高度 */}
              {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
         </div>
     );
