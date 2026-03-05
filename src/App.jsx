@@ -255,7 +255,7 @@ const AddDebtModal = ({ onClose, onSave, initialData, bookId, showToast }) => {
     const [note, setNote] = useState(initialData?.note || '');
 
     const handleSubmit = () => {
-        if (!person.trim()) return showToast("請輸入借款對象", "error");
+        if (!person.trim()) return showToast("請輸入借款對象或項目", "error");
         if (!amount || parseFloat(amount) <= 0) return showToast("請輸入有效總金額", "error");
         onSave({ 
             id: initialData?.id, 
@@ -275,10 +275,10 @@ const AddDebtModal = ({ onClose, onSave, initialData, bookId, showToast }) => {
                     <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Landmark className="text-rose-500" size={20}/> {initialData ? '編輯借款' : '新增借款紀錄'}</h2>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                <div className="p-5 space-y-4 overflow-y-auto pb-8">
+                <div className="p-5 space-y-4 overflow-y-auto pb-8 hide-scrollbar">
                     <div>
-                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">借款對象 (向誰借)</label>
-                        <input autoFocus type="text" value={person} onChange={e => setPerson(e.target.value)} placeholder="例如：王小明..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-rose-400 transition-colors"/>
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">借款對象 / 項目名稱</label>
+                        <input autoFocus type="text" value={person} onChange={e => setPerson(e.target.value)} placeholder="例如：王小明、銀行車貸..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-rose-400 transition-colors"/>
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-400 mb-1.5 block">借款總額</label>
@@ -324,7 +324,7 @@ const AddRepaymentModal = ({ onClose, onSave, targetDebt, showToast }) => {
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
-                <div className="p-5 space-y-4 overflow-y-auto pb-8">
+                <div className="p-5 space-y-4 overflow-y-auto pb-8 hide-scrollbar">
                     <div>
                         <label className="text-xs font-bold text-emerald-500 mb-1.5 block">還款金額</label>
                         <div className="relative">
@@ -359,7 +359,7 @@ const DebtDetailsModal = ({ onClose, debt, onDeleteRepayment }) => {
                     <h2 className="text-base font-black text-gray-800 flex items-center gap-2"><User size={18} className="text-blue-500"/> {debt.person} 的還款明細</h2>
                     <button onClick={onClose} className="bg-white border border-gray-200 p-1.5 rounded-full hover:bg-gray-100"><X size={18}/></button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
                     {sortedRepayments.length === 0 ? (
                         <div className="text-center py-10 text-gray-400 text-sm font-bold bg-gray-50 rounded-2xl border border-dashed border-gray-200">目前尚無還款紀錄</div>
                     ) : (
@@ -378,6 +378,95 @@ const DebtDetailsModal = ({ onClose, debt, onDeleteRepayment }) => {
                     )}
                 </div>
              </div>
+        </div>
+    );
+};
+
+// --- DEDICATED DEBT BOOK MANAGER ---
+const DebtBookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
+    const [isAdding, setIsAdding] = useState(false);
+    const [newBookName, setNewBookName] = useState('');
+    const [editingBook, setEditingBook] = useState(null); 
+    const [bookToDelete, setBookToDelete] = useState(null);
+    
+    if (!isOpen) return null;
+
+    const handleCreate = () => {
+        if(!newBookName.trim()) {
+            showToast("請輸入借貸帳本名稱", "error");
+            return;
+        }
+        onSaveBook({ name: newBookName });
+        setNewBookName('');
+        setIsAdding(false);
+    };
+
+    const handleUpdate = () => {
+        if(!editingBook || !editingBook.name.trim()) return;
+        onSaveBook({ id: editingBook.id, name: editingBook.name });
+        setEditingBook(null);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
+            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Landmark size={24} className="text-rose-600"/> 借貸帳本管理</h3>
+                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
+                </div>
+
+                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
+                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無借貸帳本</div>}
+                    {books.map(book => {
+                        const isCurrent = book.id === currentBookId;
+                        const isEditingThis = editingBook?.id === book.id;
+
+                        if (isEditingThis) {
+                            return (
+                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
+                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm font-bold text-rose-800 outline-none focus:ring-2 focus:ring-rose-400"/>
+                                    <button onClick={handleUpdate} className="bg-rose-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-rose-700 transition-colors"><Check size={18}/></button>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-rose-50/50 border-rose-400 shadow-sm' : 'bg-white border-gray-100 hover:border-rose-200 hover:bg-rose-50/30'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-rose-100 group-hover:text-rose-500 transition-colors'}`}>
+                                        <Landmark size={20}/>
+                                    </div>
+                                    <div>
+                                        <span className={`font-bold block ${isCurrent ? 'text-rose-800' : 'text-gray-700'}`}>{book.name}</span>
+                                        {isCurrent && <span className="text-[10px] text-rose-500 font-bold bg-rose-100 px-2 py-0.5 rounded-full">目前使用中</span>}
+                                    </div>
+                                </div>
+                                <div className="flex gap-1 transition-opacity">
+                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-rose-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
+                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {isAdding ? (
+                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
+                        <label className="text-xs font-bold text-gray-500">建立新借貸帳本</label>
+                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入借貸帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all"/>
+                        <div className="flex gap-2">
+                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
+                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-md shadow-rose-200 hover:bg-rose-700 disabled:opacity-50 transition-all">新增</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center justify-center gap-2">
+                        <Plus size={20}/> 建立新借貸帳本
+                    </button>
+                )}
+            </div>
+            
+            <ConfirmModal isOpen={!!bookToDelete} title="刪除借貸帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有借款與還款紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
         </div>
     );
 };
@@ -471,7 +560,7 @@ const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
                     <h2 className="text-lg font-bold text-gray-800">{initialData ? "編輯紀錄" : "新增黃金"}</h2>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20} /></button>
                 </div>
-                <div className="p-4 space-y-4 overflow-y-auto">
+                <div className="p-4 space-y-4 overflow-y-auto hide-scrollbar">
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400">購買日期</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} className="w-full bg-transparent font-bold"/></div>
                     <div className="flex gap-2">
                          <div className="flex-1 bg-gray-50 p-3 rounded-xl border border-gray-100"><label className="text-xs font-bold text-gray-400">重量 ({unit})</label><input type="number" value={weightInput} onChange={e=>setWeightInput(e.target.value)} className="w-full bg-transparent text-2xl font-black"/></div>
@@ -918,11 +1007,11 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
     );
 };
 
-const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, allDebts, user, appId, db, showToast }) => {
+const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, categories, allDebts, user, appId, db, showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
     
     const handleExport = () => {
-        const data = { goldTransactions, books, allExpenses, categories, debts: allDebts };
+        const data = { goldTransactions, books, debtBooks, allExpenses, categories, debts: allDebts };
         const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); 
@@ -947,7 +1036,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, a
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                if (!data.books && !data.allExpenses && !data.goldTransactions && !data.debts) {
+                if (!data.books && !data.allExpenses && !data.goldTransactions && !data.debts && !data.debtBooks) {
                     throw new Error("無效的備份檔案格式");
                 }
 
@@ -968,6 +1057,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, a
 
                 await importCollection('gold_transactions', data.goldTransactions);
                 await importCollection('account_books', data.books);
+                await importCollection('debt_books', data.debtBooks);
                 await importCollection('expense_transactions', data.allExpenses);
                 await importCollection('expense_categories', data.categories);
                 await importCollection('debts', data.debts);
@@ -1001,7 +1091,7 @@ const BackupRestoreView = ({ goldTransactions, books, allExpenses, categories, a
                 </div>
                 <h2 className="text-xl font-black text-gray-800 mb-2">備份與還原</h2>
                 <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                    您可以將所有的記帳、黃金存摺、帳本、分類以及借款資料匯出為一個檔案保存在手機或電腦中，以便更換設備或需要時進行還原。
+                    您可以將所有的記帳、黃金存摺、各類帳本、分類以及借款資料匯出為一個檔案保存在手機或電腦中，以便更換設備或需要時進行還原。
                 </p>
 
                 <div className="space-y-4">
@@ -1288,6 +1378,9 @@ export default function App() {
     // Expense & Debt Data
     const [books, setBooks] = useState([]);
     const [currentBookId, setCurrentBookId] = useState(null);
+    const [debtBooks, setDebtBooks] = useState([]);
+    const [currentDebtBookId, setCurrentDebtBookId] = useState(null);
+    
     const [allExpenses, setAllExpenses] = useState([]);
     const [allDebts, setAllDebts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -1312,6 +1405,7 @@ export default function App() {
     const [expenseToDelete, setExpenseToDelete] = useState(null);
     const [goldToDelete, setGoldToDelete] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
+    const [showDebtBookManager, setShowDebtBookManager] = useState(false);
 
     // Debt UI State
     const [showDebtAdd, setShowDebtAdd] = useState(false);
@@ -1441,11 +1535,26 @@ export default function App() {
         const unsubBooks = onSnapshot(query(booksRef, orderBy('createdAt', 'desc')), (snap) => {
             const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
             setBooks(b);
-            if (b.length > 0) {
-                if (!currentBookId || !b.find(book => book.id === currentBookId)) setCurrentBookId(b[0].id);
-            } else if (currentBookId) {
-                setCurrentBookId(null);
-            }
+            setCurrentBookId(prev => {
+                if (b.length > 0) {
+                    if (!prev || !b.find(book => book.id === prev)) return b[0].id;
+                    return prev;
+                }
+                return null;
+            });
+        });
+
+        const debtBooksRef = collection(db, 'artifacts', appId, 'users', user.uid, 'debt_books');
+        const unsubDebtBooks = onSnapshot(query(debtBooksRef, orderBy('createdAt', 'desc')), (snap) => {
+            const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
+            setDebtBooks(b);
+            setCurrentDebtBookId(prev => {
+                if (b.length > 0) {
+                    if (!prev || !b.find(book => book.id === prev)) return b[0].id;
+                    return prev;
+                }
+                return null;
+            });
         });
 
         const catRef = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories');
@@ -1467,7 +1576,7 @@ export default function App() {
             setAllDebts(snap.docs.map(d => ({id:d.id, ...d.data()})));
         });
 
-        return () => { unsubGold(); unsubBooks(); unsubCat(); unsubDebts(); };
+        return () => { unsubGold(); unsubBooks(); unsubDebtBooks(); unsubCat(); unsubDebts(); };
     }, [user]);
 
     useEffect(() => {
@@ -1486,9 +1595,9 @@ export default function App() {
     }, [allExpenses, currentBookId]);
 
     const debts = useMemo(() => {
-        if (!currentBookId) return [];
-        return allDebts.filter(d => d.bookId === currentBookId);
-    }, [allDebts, currentBookId]);
+        if (!currentDebtBookId) return [];
+        return allDebts.filter(d => d.bookId === currentDebtBookId);
+    }, [allDebts, currentDebtBookId]);
 
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
@@ -1581,6 +1690,33 @@ export default function App() {
         } catch (e) { showToast(`刪除帳本失敗: ${e.message}`, "error"); }
     };
 
+    // 新增：處理借貸帳本的 CRUD
+    const handleDebtBookSave = async (data) => {
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("借貸帳本已更新");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'debt_books'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增借貸帳本成功");
+            }
+        } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
+    };
+
+    const handleDebtBookDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)));
+            showToast("已刪除借貸帳本");
+            if(currentDebtBookId === id) {
+                const remainingBooks = debtBooks.filter(b => b.id !== id);
+                setCurrentDebtBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+            }
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
     const handleExpenseSave = async (data) => {
         if (!data.bookId) return showToast("未選擇帳本", "error");
         try {
@@ -1630,7 +1766,7 @@ export default function App() {
 
     // --- DEBT specific CRUD ---
     const handleDebtSave = async (data) => {
-        if (!data.bookId) return showToast("未選擇帳本", "error");
+        if (!data.bookId) return showToast("未選擇借貸帳本", "error");
         try {
             if (data.id) {
                 const { id, ...payload } = data;
@@ -1834,6 +1970,7 @@ export default function App() {
     if (!user) return <LoginView />;
 
     const currentBook = books.find(b => b.id === currentBookId);
+    const currentDebtBook = debtBooks.find(b => b.id === currentDebtBookId);
     const viewTitles = { 'home':'資產總覽', 'gold':'黃金存摺', 'expense': '生活記帳', 'debt':'借貸還款', 'history':'歷史紀錄', 'calendar': '收支日曆', 'categories':'分類管理', 'backup':'備份與還原' };
 
     return (
@@ -1857,13 +1994,15 @@ export default function App() {
                 
                 <div className="font-black text-lg text-gray-800 flex justify-center items-center gap-2 flex-1">
                     {['expense', 'history', 'calendar', 'debt'].includes(currentView) ? (
-                        <div onClick={() => setShowBookManager(true)} className="flex flex-col items-center cursor-pointer hover:bg-gray-50 px-3 py-1 rounded-xl transition-colors border border-transparent hover:border-gray-200">
+                        <div onClick={() => currentView === 'debt' ? setShowDebtBookManager(true) : setShowBookManager(true)} className="flex flex-col items-center cursor-pointer hover:bg-gray-50 px-3 py-1 rounded-xl transition-colors border border-transparent hover:border-gray-200">
                             <div className="flex items-center gap-1.5">
                                 <Wallet size={16} className={(currentView === 'history' || currentView === 'calendar') ? 'text-purple-500' : currentView === 'debt' ? 'text-rose-500' : 'text-blue-500'}/>
                                 <span className="max-w-[120px] truncate text-base leading-none">{viewTitles[currentView]}</span>
                                 <ChevronDown size={14} className="text-gray-400"/>
                             </div>
-                            <div className="text-[10px] text-gray-500 font-bold mt-1 tracking-wider">{currentBook?.name || '請選擇帳本'}</div>
+                            <div className="text-[10px] text-gray-500 font-bold mt-1 tracking-wider">
+                                {currentView === 'debt' ? (currentDebtBook?.name || '請選擇帳本') : (currentBook?.name || '請選擇帳本')}
+                            </div>
                         </div>
                     ) : (
                         <span>{viewTitles[currentView]}</span>
@@ -2026,7 +2165,7 @@ export default function App() {
                                  </div>
                             </div>
                             <button onClick={() => { 
-                                if(books.length === 0) return showToast('請先新增帳本', 'error');
+                                if(debtBooks.length === 0) return showToast('請先建立借貸帳本', 'error');
                                 setEditingDebt(null); 
                                 setShowDebtAdd(true); 
                             }} className="w-full bg-rose-500 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 active:scale-95 transition-transform"><Plus size={18}/> 新增借款紀錄</button>
@@ -2047,7 +2186,7 @@ export default function App() {
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSettled ? 'bg-emerald-100 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}><User size={20}/></div>
                                                 <div>
-                                                    <div className="font-black text-gray-800 text-base">向 {debt.person} 借款</div>
+                                                    <div className="font-black text-gray-800 text-base">{debt.person}</div>
                                                     <div className="text-[10px] text-gray-400 mt-0.5">{debt.date} {debt.note && `· ${debt.note}`}</div>
                                                 </div>
                                             </div>
@@ -2075,11 +2214,11 @@ export default function App() {
                                 )
                             })}
                         </div>
-                        {showDebtAdd && <AddDebtModal onClose={() => setShowDebtAdd(false)} onSave={handleDebtSave} initialData={editingDebt} bookId={currentBookId} showToast={showToast} />}
+                        {showDebtAdd && <AddDebtModal onClose={() => setShowDebtAdd(false)} onSave={handleDebtSave} initialData={editingDebt} bookId={currentDebtBookId} showToast={showToast} />}
                         {showRepaymentAdd && <AddRepaymentModal onClose={() => setShowRepaymentAdd(false)} onSave={handleRepaymentSave} targetDebt={activeDebt} showToast={showToast} />}
                         {showDebtDetails && <DebtDetailsModal onClose={() => setShowDebtDetails(false)} debt={activeDebt} onDeleteRepayment={handleRepaymentDelete} />}
-                        <BookManager isOpen={showBookManager} onClose={() => setShowBookManager(false)} books={books} onSaveBook={handleBookSave} onDeleteBook={handleBookDelete} currentBookId={currentBookId} setCurrentBookId={setCurrentBookId} showToast={showToast} />
-                        <ConfirmModal isOpen={!!debtToDelete} title="刪除借款紀錄" message={`確定要刪除向「${debtToDelete?.person}」的借款嗎？裡面的還款明細也會一併刪除。`} onConfirm={() => { handleDebtDelete(debtToDelete?.id); setDebtToDelete(null); }} onCancel={() => setDebtToDelete(null)} />
+                        <DebtBookManager isOpen={showDebtBookManager} onClose={() => setShowDebtBookManager(false)} books={debtBooks} onSaveBook={handleDebtBookSave} onDeleteBook={handleDebtBookDelete} currentBookId={currentDebtBookId} setCurrentBookId={setCurrentDebtBookId} showToast={showToast} />
+                        <ConfirmModal isOpen={!!debtToDelete} title="刪除借款紀錄" message={`確定要刪除「${debtToDelete?.person}」這筆借款嗎？裡面的還款明細也會一併刪除。`} onConfirm={() => { handleDebtDelete(debtToDelete?.id); setDebtToDelete(null); }} onCancel={() => setDebtToDelete(null)} />
                     </div>
                  )}
 
@@ -2175,6 +2314,7 @@ export default function App() {
                          <BackupRestoreView 
                              goldTransactions={goldTransactions} 
                              books={books} 
+                             debtBooks={debtBooks}
                              allExpenses={allExpenses} 
                              categories={categories} 
                              allDebts={allDebts}
