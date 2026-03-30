@@ -684,224 +684,182 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
         </div>
     );
 };
-// --- DEBT COMPONENTS (借貸還款專用元件) ---
-const AddDebtModal = ({ onClose, onSave, initialData, bookId, showToast }) => {
-    const [person, setPerson] = useState(initialData?.person || '');
-    const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
-    const [date, setDate] = useState(initialData?.date || getLocalYMD());
-    const [note, setNote] = useState(initialData?.note || '');
 
-    const handleSubmit = () => {
-        if (!person.trim()) return showToast("請輸入借款對象或項目", "error");
-        if (!amount || parseFloat(amount) <= 0) return showToast("請輸入有效總金額", "error");
-        onSave({ 
-            id: initialData?.id, 
-            bookId, 
-            person: person.trim(), 
-            amount: parseFloat(amount), 
-            date, 
-            note,
-            repayments: initialData?.repayments || []
-        });
-    };
+const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, showToast }) => {
+    const [amount, setAmount] = useState(initialData?.amount || '');
+    const [date, setDate] = useState(initialData?.date || getLocalYMD());
+    const [type, setType] = useState(initialData?.type || 'expense');
+    
+    const availableCats = categories.filter(c => c.type === type);
+    const [category, setCategory] = useState(initialData?.category || (availableCats[0]?.id || ''));
+    
+    useEffect(() => {
+        if (!availableCats.find(c => c.id === category)) {
+            setCategory(availableCats[0]?.id || '');
+        }
+    }, [type, categories]);
 
-    return (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
-                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Landmark className="text-rose-500" size={20}/> {initialData ? '編輯借款' : '新增借款紀錄'}</h2>
-                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
-                </div>
-                <div className="p-5 space-y-4 overflow-y-auto pb-8 hide-scrollbar">
-                    <div>
-                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">借款對象 / 項目名稱</label>
-                        <input autoFocus type="text" value={person} onChange={e => setPerson(e.target.value)} placeholder="例如：王小明、銀行車貸..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-rose-400 transition-colors"/>
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">借款總額</label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-3 font-black text-xl outline-none focus:border-rose-400 transition-colors"/>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">日期</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent flex-1 font-bold outline-none text-sm text-gray-800"/>
-                    </div>
-                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">備註</label>
-                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="借款事由..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
-                    </div>
-                    <div className="pt-2">
-                        <button onClick={handleSubmit} className="w-full py-3.5 bg-rose-500 text-white rounded-xl font-bold shadow-lg shadow-rose-200 active:scale-95 transition-transform text-base">{initialData ? '儲存修改' : '確認新增'}</button>
-                    </div>
-                </div>
-             </div>
-        </div>
-    );
+    const [itemName, setItemName] = useState(initialData?.itemName || '');
+    const [note, setNote] = useState(initialData?.note || '');
+    const [showKeypad, setShowKeypad] = useState(false);
+
+    const handleSubmit = () => {
+        if (!amount || parseFloat(amount) === 0) {
+            showToast("請輸入金額", "error");
+            return;
+        }
+        if (!category) {
+            showToast("請選擇分類", "error");
+            return;
+        }
+        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, itemName, note, type, bookId });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+                <div className="p-3 border-b border-gray-100 flex justify-between items-center">
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button onClick={()=>setType('expense')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type==='expense'?'bg-white text-red-500 shadow-sm':'text-gray-400'}`}>支出</button>
+                        <button onClick={()=>setType('income')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type==='income'?'bg-white text-green-500 shadow-sm':'text-gray-400'}`}>收入</button>
+                    </div>
+                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
+                </div>
+                <div className="p-4 space-y-3 overflow-y-auto pb-8 hide-scrollbar">
+                    <div onClick={() => setShowKeypad(!showKeypad)} className={`text-center py-3 rounded-2xl border-2 cursor-pointer transition-colors ${type === 'expense' ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
+                         <div className="text-[10px] font-bold opacity-60 mb-0.5">金額</div>
+                         <div className="text-3xl font-black flex items-center justify-center gap-1"><span>$</span><span>{amount || '0'}</span><Pencil size={14} className="opacity-30 ml-2"/></div>
+                    </div>
+                    
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">日期</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent flex-1 font-bold outline-none text-sm text-gray-800"/>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">分類</label>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {availableCats.map(c => {
+                                const Icon = ICON_MAP[c.icon] || Tag;
+                                return (
+                                    <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all ${category===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
+                                        <Icon size={20} className="mb-1"/>
+                                        <span className="text-[10px] font-bold truncate w-full px-1 text-center">{c.name}</span>
+                                    </button>
+                                );
+                            })}
+                            {availableCats.length === 0 && <div className="col-span-4 text-center text-gray-400 text-xs py-2">無分類，請至「分類管理」新增</div>}
+                        </div>
+                    </div>
+
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">明細</label>
+                        <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="如：拿鐵..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
+                    </div>
+                    
+                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
+                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">備註</label>
+                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="寫點什麼..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
+                    </div>
+
+                    {!showKeypad && (
+                        <div className="pt-1">
+                            <button onClick={handleSubmit} className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform text-base">{initialData ? '儲存修改' : '確認記帳'}</button>
+                        </div>
+                    )}
+                </div>
+             </div>
+             {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
+        </div>
+    );
 };
 
-const AddRepaymentModal = ({ onClose, onSave, targetDebt, showToast }) => {
-    const [amount, setAmount] = useState('');
-    const [date, setDate] = useState(getLocalYMD());
-    const [note, setNote] = useState('');
+const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
+    const [isAdding, setIsAdding] = useState(false);
+    const [newBookName, setNewBookName] = useState('');
+    const [editingBook, setEditingBook] = useState(null); 
+    const [bookToDelete, setBookToDelete] = useState(null);
+    
+    if (!isOpen) return null;
 
-    const handleSubmit = () => {
-        if (!amount || parseFloat(amount) <= 0) return showToast("請輸入有效還款金額", "error");
-        onSave(targetDebt.id, { amount: parseFloat(amount), date, note });
-    };
+    const handleCreate = () => {
+        if(!newBookName.trim()) {
+            showToast("請輸入帳本名稱", "error");
+            return;
+        }
+        onSaveBook({ name: newBookName });
+        setNewBookName('');
+        setIsAdding(false);
+    };
 
-    return (
-        <div className="fixed inset-0 z-[70] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-[slideUp_0.2s_ease-out]">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-800">新增還款</h2>
-                        <div className="text-[10px] text-gray-400 mt-0.5">對象：{targetDebt.person}</div>
-                    </div>
-                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
-                </div>
-                <div className="p-5 space-y-4 overflow-y-auto pb-8 hide-scrollbar">
-                    <div>
-                        <label className="text-xs font-bold text-emerald-500 mb-1.5 block">還款金額</label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                            <input autoFocus type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className="w-full bg-emerald-50 border border-emerald-100 rounded-xl pl-8 pr-4 py-3 font-black text-xl text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-400 transition-colors"/>
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">日期</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-transparent flex-1 font-bold outline-none text-sm text-gray-800"/>
-                    </div>
-                    <div className="bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-400 w-12 shrink-0">備註</label>
-                        <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="還款備註 (選填)..." className="bg-transparent flex-1 text-sm font-bold outline-none text-gray-800"/>
-                    </div>
-                    <div className="pt-2">
-                        <button onClick={handleSubmit} className="w-full py-3.5 bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 active:scale-95 transition-transform text-base">確認還款</button>
-                    </div>
-                </div>
-             </div>
-        </div>
-    );
-};
+    const handleUpdate = () => {
+        if(!editingBook || !editingBook.name.trim()) return;
+        onSaveBook({ id: editingBook.id, name: editingBook.name });
+        setEditingBook(null);
+    };
 
-const DebtDetailsModal = ({ onClose, debt, onDeleteRepayment }) => {
-    const sortedRepayments = [...(debt.repayments || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
+            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Book size={24} className="text-blue-600"/> 帳本管理</h3>
+                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
+                </div>
 
-    return (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-[slideUp_0.2s_ease-out]">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h2 className="text-base font-black text-gray-800 flex items-center gap-2"><User size={18} className="text-blue-500"/> {debt.person} 的還款明細</h2>
-                    <button onClick={onClose} className="bg-white border border-gray-200 p-1.5 rounded-full hover:bg-gray-100"><X size={18}/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
-                    {sortedRepayments.length === 0 ? (
-                        <div className="text-center py-10 text-gray-400 text-sm font-bold bg-gray-50 rounded-2xl border border-dashed border-gray-200">目前尚無還款紀錄</div>
-                    ) : (
-                        sortedRepayments.map((r, i) => (
-                            <div key={r.id} className={`flex justify-between items-center p-3 transition-colors ${i !== sortedRepayments.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                                <div>
-                                    <div className="font-bold text-gray-800 text-sm">{r.date}</div>
-                                    {r.note && <div className="text-xs text-gray-400 mt-0.5">{r.note}</div>}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="font-black text-emerald-500">{formatMoney(r.amount)}</span>
-                                    <button onClick={() => onDeleteRepayment(debt.id, r.id)} className="p-1.5 text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14}/></button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-             </div>
-        </div>
-    );
-};
+                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
+                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
+                    {books.map(book => {
+                        const isCurrent = book.id === currentBookId;
+                        const isEditingThis = editingBook?.id === book.id;
 
-const DebtBookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
-    const [isAdding, setIsAdding] = useState(false);
-    const [newBookName, setNewBookName] = useState('');
-    const [editingBook, setEditingBook] = useState(null); 
-    const [bookToDelete, setBookToDelete] = useState(null);
-    
-    if (!isOpen) return null;
+                        if (isEditingThis) {
+                            return (
+                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
+                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"/>
+                                    <button onClick={handleUpdate} className="bg-blue-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors"><Check size={18}/></button>
+                                </div>
+                            );
+                        }
 
-    const handleCreate = () => {
-        if(!newBookName.trim()) return showToast("請輸入借貸帳本名稱", "error");
-        onSaveBook({ name: newBookName });
-        setNewBookName('');
-        setIsAdding(false);
-    };
+                        return (
+                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-blue-50/50 border-blue-400 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-200 hover:bg-blue-50/30'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors'}`}>
+                                        <Wallet size={20}/>
+                                    </div>
+                                    <div>
+                                        <span className={`font-bold block ${isCurrent ? 'text-blue-800' : 'text-gray-700'}`}>{book.name}</span>
+                                        {isCurrent && <span className="text-[10px] text-blue-500 font-bold bg-blue-100 px-2 py-0.5 rounded-full">目前使用中</span>}
+                                    </div>
+                                </div>
+                                <div className="flex gap-1 transition-opacity">
+                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-blue-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
+                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
 
-    const handleUpdate = () => {
-        if(!editingBook || !editingBook.name.trim()) return;
-        onSaveBook({ id: editingBook.id, name: editingBook.name });
-        setEditingBook(null);
-    };
-
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Landmark size={24} className="text-rose-600"/> 借貸帳本管理</h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
-                </div>
-
-                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
-                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無借貸帳本</div>}
-                    {books.map(book => {
-                        const isCurrent = book.id === currentBookId;
-                        const isEditingThis = editingBook?.id === book.id;
-
-                        if (isEditingThis) {
-                            return (
-                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
-                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm font-bold text-rose-800 outline-none focus:ring-2 focus:ring-rose-400"/>
-                                    <button onClick={handleUpdate} className="bg-rose-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-rose-700 transition-colors"><Check size={18}/></button>
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-rose-50/50 border-rose-400 shadow-sm' : 'bg-white border-gray-100 hover:border-rose-200 hover:bg-rose-50/30'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-rose-100 group-hover:text-rose-500 transition-colors'}`}>
-                                        <Landmark size={20}/>
-                                    </div>
-                                    <div>
-                                        <span className={`font-bold block ${isCurrent ? 'text-rose-800' : 'text-gray-700'}`}>{book.name}</span>
-                                        {isCurrent && <span className="text-[10px] text-rose-500 font-bold bg-rose-100 px-2 py-0.5 rounded-full">目前使用中</span>}
-                                    </div>
-                                </div>
-                                <div className="flex gap-1 transition-opacity">
-                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-rose-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
-                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {isAdding ? (
-                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
-                        <label className="text-xs font-bold text-gray-500">建立新借貸帳本</label>
-                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入借貸帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all"/>
-                        <div className="flex gap-2">
-                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
-                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold shadow-md shadow-rose-200 hover:bg-rose-700 disabled:opacity-50 transition-all">新增</button>
-                        </div>
-                    </div>
-                ) : (
-                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center justify-center gap-2">
-                        <Plus size={20}/> 建立新借貸帳本
-                    </button>
-                )}
-            </div>
-            
-            <ConfirmModal isOpen={!!bookToDelete} title="刪除借貸帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有借款與還款紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
-        </div>
-    );
+                {isAdding ? (
+                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
+                        <label className="text-xs font-bold text-gray-500">建立新帳本</label>
+                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
+                        <div className="flex gap-2">
+                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
+                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 transition-all">新增</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center gap-2">
+                        <Plus size={20}/> 建立新帳本
+                    </button>
+                )}
+            </div>
+            
+            <ConfirmModal isOpen={!!bookToDelete} title="刪除帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有記帳紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
+        </div>
+    );
 };
 
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
@@ -1313,131 +1271,495 @@ const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) =
 
 // --- MAIN APPLICATION SHELL ---
 export default function App() {
-// --- 借貸狀態 (State) ---
-    const [debtBooks, setDebtBooks] = useState([]);
-    const [currentDebtBookId, setCurrentDebtBookId] = useState(null);
-    const [allDebts, setAllDebts] = useState([]);
-    const [debtTab, setDebtTab] = useState('active'); // 切換「未結清」或「歷史紀錄」
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    
+    // 全域 Toast 狀態
+    const [toast, setToast] = useState({ message: '', type: 'success' });
+    const showToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
+    };
 
-    const [showDebtAdd, setShowDebtAdd] = useState(false);
-    const [editingDebt, setEditingDebt] = useState(null);
-    const [debtToDelete, setDebtToDelete] = useState(null);
-    const [showRepaymentAdd, setShowRepaymentAdd] = useState(false);
-    const [showDebtDetails, setShowDebtDetails] = useState(false);
-    const [activeDebt, setActiveDebt] = useState(null);
-    const [showDebtBookManager, setShowDebtBookManager] = useState(false);
+    // 全域歷史導覽堆疊
+    const [historyStack, setHistoryStack] = useState(['home']);
+    const currentView = historyStack[historyStack.length - 1];
 
-    // --- 資料計算 (Memo) ---
-    const debts = useMemo(() => {
-        if (!currentDebtBookId) return [];
-        return allDebts.filter(d => d.bookId === currentDebtBookId);
-    }, [allDebts, currentDebtBookId]);
+    const navigateTo = (view) => {
+        setHistoryStack(prev => {
+            const existingIndex = prev.indexOf(view);
+            if (existingIndex !== -1) return prev.slice(0, existingIndex + 1);
+            return [...prev, view];
+        });
+    };
 
-    const debtStats = useMemo(() => {
-        let totalBorrowed = 0;
-        let totalRepaid = 0;
-        debts.forEach(d => {
-            totalBorrowed += (Number(d.amount) || 0);
-            const repaid = (d.repayments || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-            totalRepaid += repaid;
-        });
-        return { totalBorrowed, totalRepaid, remaining: totalBorrowed - totalRepaid };
-    }, [debts]);
+    const goBack = () => {
+        setHistoryStack(prev => prev.length > 1 ? prev.slice(0, -1) : ['home']);
+    };
 
-    // 分類：未結清 vs 已結清
-    const activeDebts = debts.filter(d => {
-        const repaid = (d.repayments || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-        return d.amount - repaid > 0;
-    });
+    // PWA & Install state
+    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const [showInstallBtn, setShowInstallBtn] = useState(false);
+    const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+    const [showAndroidPrompt, setShowAndroidPrompt] = useState(false);
+    const [isIOS, setIsIOS] = useState(false);
 
-    const settledDebts = debts.filter(d => {
-        const repaid = (d.repayments || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-        return d.amount - repaid <= 0;
-    });
+    // Gold Data
+    const [goldTransactions, setGoldTransactions] = useState([]);
+    const [goldPrice, setGoldPrice] = useState(2880);
+    const [goldHistory, setGoldHistory] = useState([]);
+    const [goldIntraday, setGoldIntraday] = useState([]);
+    const [goldPeriod, setGoldPeriod] = useState('1d');
+    const [priceLoading, setPriceLoading] = useState(false);
+    const [showGoldAdd, setShowGoldAdd] = useState(false);
+    const [editingGold, setEditingGold] = useState(null);
+    const [showChart, setShowChart] = useState(false);
+    const [showConverter, setShowConverter] = useState(false);
 
-    // --- Firebase CRUD 函數 ---
-    const handleDebtBookSave = async (data) => {
-        try {
-            if (data.id) {
-                const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
-                showToast("借貸帳本已更新");
-            } else {
-                const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'debt_books'), { ...payload, createdAt: serverTimestamp() });
-                showToast("新增借貸帳本成功");
-            }
-        } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
-    };
+    // Expense & Debt Data
+    const [books, setBooks] = useState([]);
+    const [currentBookId, setCurrentBookId] = useState(null);
+    const [debtBooks, setDebtBooks] = useState([]);
+    const [currentDebtBookId, setCurrentDebtBookId] = useState(null);
+    
+    const [allExpenses, setAllExpenses] = useState([]);
+    const [allDebts, setAllDebts] = useState([]);
+    const [categories, setCategories] = useState([]);
+    
+    // History specific state
+    const [currentHistoryDate, setCurrentHistoryDate] = useState(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    const [historyTab, setHistoryTab] = useState('stats'); 
+    
+    // Calendar specific state
+    const [calendarDate, setCalendarDate] = useState(() => new Date());
+    const [calendarSelectedDate, setCalendarSelectedDate] = useState(() => getLocalYMD());
+    
+    const [touchStartX, setTouchStartX] = useState(null);
+    const [touchStartY, setTouchStartY] = useState(null);
 
-    const handleDebtBookDelete = async (id) => {
-        if (!id) return;
-        try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)));
-            showToast("已刪除借貸帳本");
-            if(currentDebtBookId === id) {
-                const remainingBooks = debtBooks.filter(b => b.id !== id);
-                setCurrentDebtBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
-            }
-        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
-    };
+    // UI State
+    const [showExpenseAdd, setShowExpenseAdd] = useState(false);
+    const [editingExpense, setEditingExpense] = useState(null);
+    const [expenseToDelete, setExpenseToDelete] = useState(null);
+    const [goldToDelete, setGoldToDelete] = useState(null);
+    const [showBookManager, setShowBookManager] = useState(false);
+    const [showDebtBookManager, setShowDebtBookManager] = useState(false);
 
-    const handleDebtSave = async (data) => {
-        if (!data.bookId) return showToast("未選擇借貸帳本", "error");
-        try {
-            if (data.id) {
-                const { id, ...payload } = data;
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(id)), { ...payload, updatedAt: serverTimestamp() });
-                showToast("更新借款成功");
-            } else {
-                const { id, ...payload } = data;
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'debts'), { ...payload, createdAt: serverTimestamp() });
-                showToast("新增借款成功");
-            }
-            setShowDebtAdd(false); setEditingDebt(null);
-        } catch (e) { showToast(`儲存借款失敗: ${e.message}`, "error"); }
-    };
+    // Debt UI State
+    const [showDebtAdd, setShowDebtAdd] = useState(false);
+    const [editingDebt, setEditingDebt] = useState(null);
+    const [debtToDelete, setDebtToDelete] = useState(null);
+    const [showRepaymentAdd, setShowRepaymentAdd] = useState(false);
+    const [showDebtDetails, setShowDebtDetails] = useState(false);
+    const [activeDebt, setActiveDebt] = useState(null);
 
-    const handleDebtDelete = async (id) => {
-        if (!id) return;
-        try {
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(id)));
-            setShowDebtAdd(false); setEditingDebt(null);
-            showToast("已刪除整筆借款紀錄");
-        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
-    };
+    useEffect(() => {
+        if (!document.getElementById('tailwind-script')) {
+            const script = document.createElement('script');
+            script.id = 'tailwind-script';
+            script.src = "https://cdn.tailwindcss.com";
+            script.async = true;
+            document.head.appendChild(script);
+        }
+    }, []);
 
-    const handleRepaymentSave = async (debtId, repaymentData) => {
-        const targetDebt = allDebts.find(d => d.id === debtId);
-        if (!targetDebt) return;
-        const newRepayment = { ...repaymentData, id: generateId(), createdAt: Date.now() };
-        const updatedRepayments = [...(targetDebt.repayments || []), newRepayment];
-        
-        try {
-            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
-                repayments: updatedRepayments,
-                updatedAt: serverTimestamp()
-            });
-            showToast("已紀錄還款");
-            setShowRepaymentAdd(false);
-        } catch (e) { showToast(`還款失敗: ${e.message}`, "error"); }
-    };
+    // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
+    useEffect(() => {
+        const metaTags = [
+            { name: 'theme-color', content: '#f9fafb' }, 
+            { name: 'apple-mobile-web-app-capable', content: 'yes' }, 
+            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, 
+            { name: 'apple-mobile-web-app-title', content: '我的記帳本' }, 
+            { name: 'mobile-web-app-capable', content: 'yes' } 
+        ];
 
-    const handleRepaymentDelete = async (debtId, repaymentId) => {
-        const targetDebt = allDebts.find(d => d.id === debtId);
-        if (!targetDebt) return;
-        const updatedRepayments = (targetDebt.repayments || []).filter(r => r.id !== repaymentId);
-        
-        try {
-            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
-                repayments: updatedRepayments,
-                updatedAt: serverTimestamp()
-            });
-            showToast("已移除該筆還款明細");
-        } catch (e) { showToast(`移除失敗: ${e.message}`, "error"); }
-    };
+        metaTags.forEach(({ name, content }) => {
+            let meta = document.querySelector(`meta[name="${name}"]`);
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = name;
+                document.head.appendChild(meta);
+            }
+            meta.content = content;
+        });
 
-    // 💡 提醒：請確保在您的 useEffect 裡面有拉取 'debt_books' 與 'debts' 的集合 (onSnapshot)
+        const absoluteIconUrl = window.location.origin + "/gold.png";
+
+        const manifest = {
+            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
+            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
+            icons: [{
+                src: absoluteIconUrl,
+                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
+            }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        
+        let link = document.querySelector('link[rel="manifest"]');
+        if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
+        link.href = manifestUrl;
+
+        let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+        if (!appleIcon) { 
+            appleIcon = document.createElement('link'); 
+            appleIcon.rel = 'apple-touch-icon'; 
+            appleIcon.href = absoluteIconUrl; 
+            document.head.appendChild(appleIcon); 
+        }
+
+        const userAgent = window.navigator.userAgent.toLowerCase();
+        const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+        const isAndroidDevice = /android/.test(userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || document.referrer.includes('android-app://');
+        
+        setIsIOS(isIOSDevice);
+
+        if (!isStandalone && (isIOSDevice || isAndroidDevice)) {
+            setShowInstallBtn(true);
+        }
+
+        const handleBeforeInstallPrompt = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+            if (!isStandalone) setShowInstallBtn(true);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        return () => {
+            URL.revokeObjectURL(manifestUrl);
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        };
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (isIOS) {
+            setShowIOSPrompt(true);
+        } else if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                setDeferredPrompt(null);
+                setShowInstallBtn(false);
+            }
+        } else {
+            setShowAndroidPrompt(true);
+        }
+    };
+
+    useEffect(() => {
+        if (!isConfigured) return; 
+        
+        getRedirectResult(auth).catch((error) => {
+            console.error("Redirect login error:", error);
+        });
+
+        const unsubscribe = onAuthStateChanged(auth, (u) => {
+            setUser(u);
+            if(u) fetchGoldPrice();
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (!user || !isConfigured) return;
+
+        const goldQ = query(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), orderBy('date', 'desc'));
+        const unsubGold = onSnapshot(goldQ, (snap) => setGoldTransactions(snap.docs.map(d => ({id:d.id, ...d.data()}))));
+
+        const booksRef = collection(db, 'artifacts', appId, 'users', user.uid, 'account_books');
+        const unsubBooks = onSnapshot(query(booksRef, orderBy('createdAt', 'desc')), (snap) => {
+            const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
+            setBooks(b);
+            setCurrentBookId(prev => {
+                if (b.length > 0) {
+                    if (!prev || !b.find(book => book.id === prev)) return b[0].id;
+                    return prev;
+                }
+                return null;
+            });
+        });
+
+        const debtBooksRef = collection(db, 'artifacts', appId, 'users', user.uid, 'debt_books');
+        const unsubDebtBooks = onSnapshot(query(debtBooksRef, orderBy('createdAt', 'desc')), (snap) => {
+            const b = snap.docs.map(d => ({id:d.id, ...d.data()}));
+            setDebtBooks(b);
+            setCurrentDebtBookId(prev => {
+                if (b.length > 0) {
+                    if (!prev || !b.find(book => book.id === prev)) return b[0].id;
+                    return prev;
+                }
+                return null;
+            });
+        });
+
+        const catRef = collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories');
+        const unsubCat = onSnapshot(query(catRef, orderBy('createdAt', 'asc')), (snap) => {
+            if (snap.empty) {
+                const defaults = [
+                    { name: '餐飲', icon: 'utensils', type: 'expense' }, { name: '日常', icon: 'home', type: 'expense' },
+                    { name: '網購', icon: 'shopping-cart', type: 'expense' }, { name: '交通', icon: 'bus', type: 'expense' },
+                    { name: '薪水', icon: 'wallet', type: 'income' }, { name: '獎金', icon: 'gift', type: 'income' }
+                ];
+                defaults.forEach(c => addDoc(catRef, { ...c, createdAt: serverTimestamp() }).catch(e=>console.error(e)));
+            } else {
+                setCategories(snap.docs.map(d => ({id:d.id, ...d.data()})));
+            }
+        });
+
+        const debtsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'debts');
+        const unsubDebts = onSnapshot(query(debtsRef, orderBy('createdAt', 'desc')), (snap) => {
+            setAllDebts(snap.docs.map(d => ({id:d.id, ...d.data()})));
+        });
+
+        return () => { unsubGold(); unsubBooks(); unsubDebtBooks(); unsubCat(); unsubDebts(); };
+    }, [user]);
+
+    useEffect(() => {
+        if (!user || !isConfigured) return;
+        const q = query(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), orderBy('date', 'desc'));
+        const unsub = onSnapshot(q, (snap) => {
+            setAllExpenses(snap.docs.map(d => ({id:d.id, ...d.data()})));
+        });
+        return () => unsub();
+    }, [user, isConfigured]);
+
+    // 所有跟隨特定帳本的資料
+    const expenses = useMemo(() => {
+        if (!currentBookId) return [];
+        return allExpenses.filter(e => e.bookId === currentBookId);
+    }, [allExpenses, currentBookId]);
+
+    const debts = useMemo(() => {
+        if (!currentDebtBookId) return [];
+        return allDebts.filter(d => d.bookId === currentDebtBookId);
+    }, [allDebts, currentDebtBookId]);
+
+    const fetchGoldPrice = async () => {
+        setPriceLoading(true);
+        try {
+            const response = await fetch('/api/gold').catch(e => null);
+            if (response && response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setGoldPrice(data.currentPrice); setGoldHistory(data.history || []); setGoldIntraday(data.intraday || []);
+                    setPriceLoading(false); return;
+                }
+            }
+            const yahooGold = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo')).then(r => r.json());
+            const yahooTwd = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=1d')).then(r => r.json());
+            if (yahooGold.chart.result && yahooTwd.chart.result) {
+                const gQuote = yahooGold.chart.result[0], tQuote = yahooTwd.chart.result[0];
+                const twdRate = tQuote.meta.regularMarketPrice, currentGoldUsd = gQuote.meta.regularMarketPrice;
+                const priceTwd = Math.floor((currentGoldUsd * twdRate / 31.1035) * 1.005);
+                setGoldPrice(priceTwd);
+                const timestamps = gQuote.timestamp, closePrices = gQuote.indicators.quote[0].close;
+                const historyData = timestamps.map((ts, i) => (!closePrices[i] ? null : { date: new Date(ts * 1000).toISOString().split('T')[0], price: Math.floor((closePrices[i] * twdRate / 31.1035) * 1.005) })).filter(x => x).slice(-30);
+                setGoldHistory(historyData); setGoldIntraday([]); 
+            } else { throw new Error("Client fetch failed"); }
+        } catch (e) { 
+            setGoldPrice(2950); setGoldHistory([{date:'2023-10-25', price:2900}, {date:'2023-10-26', price:2950}]); setGoldIntraday([]);
+        } finally { setPriceLoading(false); }
+    };
+
+    const handleExpenseSwap = async (item1, item2) => {
+        try {
+            const fallbackTime = new Date();
+            const time1 = item1.createdAt || fallbackTime;
+            const time2 = item2.createdAt || fallbackTime;
+            
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item1.id)), { createdAt: time2 });
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(item2.id)), { createdAt: time1 });
+        } catch (e) {
+            showToast(`排序失敗: ${e.message}`, "error");
+        }
+    };
+
+    // --- Firebase CRUD Handlers ---
+    const handleGoldSave = async (data) => {
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("修改黃金紀錄成功");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增黃金紀錄成功");
+            }
+            setShowGoldAdd(false); setEditingGold(null);
+        } catch (e) { showToast(`儲存失敗: ${e.message}`, "error"); }
+    };
+
+    const handleGoldDelete = async (id) => { 
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'gold_transactions', String(id))); 
+            setShowGoldAdd(false);
+            showToast("已刪除黃金紀錄");
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
+    const handleBookSave = async (data) => {
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("帳本名稱已更新");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'account_books'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增帳本成功");
+            }
+        } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
+    };
+
+    const handleBookDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'account_books', String(id)));
+            showToast("已刪除帳本");
+            if(currentBookId === id) {
+                const remainingBooks = books.filter(b => b.id !== id);
+                setCurrentBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+            }
+        } catch (e) { showToast(`刪除帳本失敗: ${e.message}`, "error"); }
+    };
+
+    const handleDebtBookSave = async (data) => {
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("借貸帳本已更新");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'debt_books'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增借貸帳本成功");
+            }
+        } catch (e) { showToast(`儲存帳本失敗: ${e.message}`, "error"); }
+    };
+
+    const handleDebtBookDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debt_books', String(id)));
+            showToast("已刪除借貸帳本");
+            if(currentDebtBookId === id) {
+                const remainingBooks = debtBooks.filter(b => b.id !== id);
+                setCurrentDebtBookId(remainingBooks.length > 0 ? remainingBooks[0].id : null);
+            }
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
+    const handleExpenseSave = async (data) => {
+        if (!data.bookId) return showToast("未選擇帳本", "error");
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("修改記帳紀錄成功");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增記帳成功");
+            }
+            setShowExpenseAdd(false); setEditingExpense(null);
+        } catch (e) { showToast(`儲存紀錄失敗: ${e.message}`, "error"); }
+    };
+
+    const handleExpenseDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', String(id)));
+            setShowExpenseAdd(false);
+            showToast("已刪除記帳紀錄");
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
+    const handleCategorySave = async (data) => {
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("分類修改成功");
+            } else { 
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'expense_categories'), { ...payload, createdAt: serverTimestamp() }); 
+                showToast("新增分類成功");
+            }
+        } catch(e) { showToast(`儲存分類失敗: ${e.message}`, "error"); }
+    };
+
+    const handleCategoryDelete = async (id) => { 
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'expense_categories', String(id))); 
+            showToast("已刪除分類");
+        } catch (e) { showToast(`刪除分類失敗: ${e.message}`, "error"); }
+    };
+
+    // --- DEBT specific CRUD ---
+    const handleDebtSave = async (data) => {
+        if (!data.bookId) return showToast("未選擇借貸帳本", "error");
+        try {
+            if (data.id) {
+                const { id, ...payload } = data;
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(id)), { ...payload, updatedAt: serverTimestamp() });
+                showToast("更新借款成功");
+            } else {
+                const { id, ...payload } = data;
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'debts'), { ...payload, createdAt: serverTimestamp() });
+                showToast("新增借款成功");
+            }
+            setShowDebtAdd(false); setEditingDebt(null);
+        } catch (e) { showToast(`儲存借款失敗: ${e.message}`, "error"); }
+    };
+
+    const handleDebtDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(id)));
+            setShowDebtAdd(false); setEditingDebt(null);
+            showToast("已刪除整筆借款紀錄");
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
+    const handleRepaymentSave = async (debtId, repaymentData) => {
+        const targetDebt = allDebts.find(d => d.id === debtId);
+        if (!targetDebt) return;
+        const newRepayment = { ...repaymentData, id: generateId(), createdAt: Date.now() };
+        const updatedRepayments = [...(targetDebt.repayments || []), newRepayment];
+        
+        try {
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
+                repayments: updatedRepayments,
+                updatedAt: serverTimestamp()
+            });
+            showToast("已紀錄還款");
+            setShowRepaymentAdd(false);
+        } catch (e) { showToast(`還款失敗: ${e.message}`, "error"); }
+    };
+
+    const handleRepaymentDelete = async (debtId, repaymentId) => {
+        const targetDebt = allDebts.find(d => d.id === debtId);
+        if (!targetDebt) return;
+        const updatedRepayments = (targetDebt.repayments || []).filter(r => r.id !== repaymentId);
+        
+        try {
+            await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
+                repayments: updatedRepayments,
+                updatedAt: serverTimestamp()
+            });
+            showToast("已移除該筆還款明細");
+        } catch (e) { showToast(`移除失敗: ${e.message}`, "error"); }
+    };
 
 
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
@@ -1776,91 +2098,84 @@ export default function App() {
                         <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                     </div>
                  )}
-{/* === DEBT VIEW (借貸還款) === */}
-                 {currentView === 'debt' && (
-                    <div className="h-full flex flex-col animate-[fadeIn_0.3s]">
-                        <div className="px-4 pt-4 pb-2 shrink-0 space-y-3 z-10">
-                            <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-gray-100">
-                                 <div className="text-center mb-3">
-                                     <div className="text-gray-400 text-[10px] font-bold mb-1 bg-gray-50 inline-block px-3 py-1 rounded-full">借款總待還</div>
-                                     <div className={`text-3xl font-black tracking-tight leading-none ${debtStats.remaining > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{formatMoney(debtStats.remaining)}</div>
-                                 </div>
-                                 <div className="grid grid-cols-2 gap-3">
-                                     <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100/50 flex flex-col justify-center">
-                                         <div className="flex items-center gap-1 text-rose-500 text-[10px] font-bold mb-0.5">總借入</div>
-                                         <div className="font-black text-gray-800 text-lg leading-none">{formatMoney(debtStats.totalBorrowed)}</div>
-                                     </div>
-                                     <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100/50 flex flex-col justify-center">
-                                         <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold mb-0.5">已還款</div>
-                                         <div className="font-black text-gray-800 text-lg leading-none">{formatMoney(debtStats.totalRepaid)}</div>
-                                     </div>
-                                 </div>
-                            </div>
-                            <button onClick={() => { 
-                                if(debtBooks.length === 0) return showToast('請先建立借貸帳本', 'error');
-                                setEditingDebt(null); 
-                                setShowDebtAdd(true); 
-                            }} className="w-full bg-rose-500 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 active:scale-95 transition-transform"><Plus size={18}/> 新增借款紀錄</button>
-                        </div>
-                        
-                        {/* 狀態切換標籤 (Tabs) */}
-                        <div className="px-4 pb-1 shrink-0">
-                            <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
-                                <button onClick={() => setDebtTab('active')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${debtTab === 'active' ? 'bg-rose-50 text-rose-600 shadow-sm border border-rose-100' : 'text-gray-400 hover:bg-gray-50'}`}>未結清 ({activeDebts.length})</button>
-                                <button onClick={() => setDebtTab('settled')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${debtTab === 'settled' ? 'bg-emerald-50 text-emerald-600 shadow-sm border border-emerald-100' : 'text-gray-400 hover:bg-gray-50'}`}>歷史紀錄 ({settledDebts.length})</button>
-                            </div>
-                        </div>
 
-                        <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-4 pt-2">
-                            {(debtTab === 'active' ? activeDebts : settledDebts).length === 0 ? (
-                                <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Landmark size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">{debtTab === 'active' ? '目前無進行中的借貸紀錄' : '目前無已結清的歷史紀錄'}</div></div>
-                            ) : (debtTab === 'active' ? activeDebts : settledDebts).map(debt => {
-                                const repaid = (debt.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
-                                const remaining = debt.amount - repaid;
-                                const progress = debt.amount > 0 ? Math.min(100, (repaid / debt.amount) * 100) : 0;
-                                const isSettled = remaining <= 0;
+                 {/* === DEBT VIEW (借貸還款) === */}
+                 {currentView === 'debt' && (
+                    <div className="h-full flex flex-col animate-[fadeIn_0.3s]">
+                        <div className="px-4 pt-4 pb-2 shrink-0 space-y-3 z-10">
+                            <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-gray-100">
+                                 <div className="text-center mb-3">
+                                     <div className="text-gray-400 text-[10px] font-bold mb-1 bg-gray-50 inline-block px-3 py-1 rounded-full">借款總待還</div>
+                                     <div className={`text-3xl font-black tracking-tight leading-none ${debtStats.remaining > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{formatMoney(debtStats.remaining)}</div>
+                                 </div>
+                                 <div className="grid grid-cols-2 gap-3">
+                                     <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100/50 flex flex-col justify-center">
+                                         <div className="flex items-center gap-1 text-rose-500 text-[10px] font-bold mb-0.5">總借入</div>
+                                         <div className="font-black text-gray-800 text-lg leading-none">{formatMoney(debtStats.totalBorrowed)}</div>
+                                     </div>
+                                     <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100/50 flex flex-col justify-center">
+                                         <div className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold mb-0.5">已還款</div>
+                                         <div className="font-black text-gray-800 text-lg leading-none">{formatMoney(debtStats.totalRepaid)}</div>
+                                     </div>
+                                 </div>
+                            </div>
+                            <button onClick={() => { 
+                                if(debtBooks.length === 0) return showToast('請先建立借貸帳本', 'error');
+                                setEditingDebt(null); 
+                                setShowDebtAdd(true); 
+                            }} className="w-full bg-rose-500 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 active:scale-95 transition-transform"><Plus size={18}/> 新增借款紀錄</button>
+                        </div>
+                        
+                        <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-4 pt-2">
+                            {debts.length === 0 ? (
+                                <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Landmark size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">目前無任何借貸紀錄</div></div>
+                            ) : debts.map(debt => {
+                                const repaid = (debt.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
+                                const remaining = debt.amount - repaid;
+                                const progress = debt.amount > 0 ? Math.min(100, (repaid / debt.amount) * 100) : 0;
+                                const isSettled = remaining <= 0;
 
-                                return (
-                                    <div key={debt.id} className={`bg-white rounded-3xl p-4 transition-all duration-300 border ${isSettled ? 'border-emerald-200 bg-emerald-50/30 shadow-sm' : 'border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] hover:shadow-md'}`}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSettled ? 'bg-emerald-100 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}><User size={20}/></div>
-                                                <div>
-                                                    <div className="font-black text-gray-800 text-base">{debt.person}</div>
-                                                    <div className="text-[10px] text-gray-400 mt-0.5">{debt.date} {debt.note && `· ${debt.note}`}</div>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => setDebtToDelete(debt)} className="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-full hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
-                                        </div>
+                                return (
+                                    <div key={debt.id} className={`bg-white rounded-3xl p-4 transition-all duration-300 border ${isSettled ? 'border-emerald-200 bg-emerald-50/20 shadow-sm' : 'border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] hover:shadow-md'}`}>
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSettled ? 'bg-emerald-100 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}><User size={20}/></div>
+                                                <div>
+                                                    <div className="font-black text-gray-800 text-base">{debt.person}</div>
+                                                    <div className="text-[10px] text-gray-400 mt-0.5">{debt.date} {debt.note && `· ${debt.note}`}</div>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setDebtToDelete(debt)} className="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-full hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
+                                        </div>
 
-                                        <div className="mb-4">
-                                            <div className="flex justify-between text-xs font-bold mb-1.5">
-                                                <span className={`${isSettled ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {isSettled ? '已結清' : `待還 ${formatMoney(remaining)}`}
-                                                </span>
-                                                <span className="text-gray-400">{formatMoney(repaid)} / {formatMoney(debt.amount)}</span>
-                                            </div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
-                                                <div className={`h-full rounded-full transition-all duration-1000 ${isSettled ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{width: `${progress}%`}}></div>
-                                            </div>
-                                        </div>
+                                        <div className="mb-4">
+                                            <div className="flex justify-between text-xs font-bold mb-1.5">
+                                                <span className={`${isSettled ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {isSettled ? '已結清' : `待還 ${formatMoney(remaining)}`}
+                                                </span>
+                                                <span className="text-gray-400">{formatMoney(repaid)} / {formatMoney(debt.amount)}</span>
+                                            </div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
+                                                <div className={`h-full rounded-full transition-all duration-1000 ${isSettled ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{width: `${progress}%`}}></div>
+                                            </div>
+                                        </div>
 
-                                        <div className="flex gap-2 pt-3 border-t border-gray-50/50">
-                                            <button disabled={isSettled} onClick={() => { setActiveDebt(debt); setShowRepaymentAdd(true); }} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isSettled ? 'bg-gray-100/50 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm hover:bg-emerald-100'}`}>新增還款</button>
-                                            <button onClick={() => { setActiveDebt(debt); setShowDebtDetails(true); }} className="flex-1 py-2.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100 rounded-xl font-bold text-sm transition-transform active:scale-95 shadow-sm">查看明細 ({(debt.repayments||[]).length})</button>
-                                            <button onClick={() => { setEditingDebt(debt); setShowDebtAdd(true); }} className="px-3 bg-gray-50 text-gray-500 hover:text-blue-600 border border-gray-100 hover:bg-blue-50 rounded-xl transition-colors shadow-sm"><Edit2 size={16}/></button>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        {showDebtAdd && <AddDebtModal onClose={() => setShowDebtAdd(false)} onSave={handleDebtSave} initialData={editingDebt} bookId={currentDebtBookId} showToast={showToast} />}
-                        {showRepaymentAdd && <AddRepaymentModal onClose={() => setShowRepaymentAdd(false)} onSave={handleRepaymentSave} targetDebt={activeDebt} showToast={showToast} />}
-                        {showDebtDetails && <DebtDetailsModal onClose={() => setShowDebtDetails(false)} debt={activeDebt} onDeleteRepayment={handleRepaymentDelete} />}
-                        <DebtBookManager isOpen={showDebtBookManager} onClose={() => setShowDebtBookManager(false)} books={debtBooks} onSaveBook={handleDebtBookSave} onDeleteBook={handleDebtBookDelete} currentBookId={currentDebtBookId} setCurrentBookId={setCurrentDebtBookId} showToast={showToast} />
-                        <ConfirmModal isOpen={!!debtToDelete} title="刪除借款紀錄" message={`確定要刪除「${debtToDelete?.person}」這筆借款嗎？裡面的還款明細也會一併刪除。`} onConfirm={() => { handleDebtDelete(debtToDelete?.id); setDebtToDelete(null); }} onCancel={() => setDebtToDelete(null)} />
-                    </div>
-                 )}
+                                        <div className="flex gap-2 pt-3 border-t border-gray-50">
+                                            <button disabled={isSettled} onClick={() => { setActiveDebt(debt); setShowRepaymentAdd(true); }} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isSettled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm hover:bg-emerald-100'}`}>新增還款</button>
+                                            <button onClick={() => { setActiveDebt(debt); setShowDebtDetails(true); }} className="flex-1 py-2.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100 rounded-xl font-bold text-sm transition-transform active:scale-95 shadow-sm">查看明細 ({(debt.repayments||[]).length})</button>
+                                            <button onClick={() => { setEditingDebt(debt); setShowDebtAdd(true); }} className="px-3 bg-gray-50 text-gray-500 hover:text-blue-600 border border-gray-100 hover:bg-blue-50 rounded-xl transition-colors shadow-sm"><Edit2 size={16}/></button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        {showDebtAdd && <AddDebtModal onClose={() => setShowDebtAdd(false)} onSave={handleDebtSave} initialData={editingDebt} bookId={currentDebtBookId} showToast={showToast} />}
+                        {showRepaymentAdd && <AddRepaymentModal onClose={() => setShowRepaymentAdd(false)} onSave={handleRepaymentSave} targetDebt={activeDebt} showToast={showToast} />}
+                        {showDebtDetails && <DebtDetailsModal onClose={() => setShowDebtDetails(false)} debt={activeDebt} onDeleteRepayment={handleRepaymentDelete} />}
+                        <DebtBookManager isOpen={showDebtBookManager} onClose={() => setShowDebtBookManager(false)} books={debtBooks} onSaveBook={handleDebtBookSave} onDeleteBook={handleDebtBookDelete} currentBookId={currentDebtBookId} setCurrentBookId={setCurrentDebtBookId} showToast={showToast} />
+                        <ConfirmModal isOpen={!!debtToDelete} title="刪除借款紀錄" message={`確定要刪除「${debtToDelete?.person}」這筆借款嗎？裡面的還款明細也會一併刪除。`} onConfirm={() => { handleDebtDelete(debtToDelete?.id); setDebtToDelete(null); }} onCancel={() => setDebtToDelete(null)} />
+                    </div>
+                 )}
 
                  {/* === CALENDAR VIEW === */}
                  {currentView === 'calendar' && (
@@ -2149,3 +2464,4 @@ export default function App() {
         </div>
     );
 }
+這是目前系統，我想在借貸還款的地方在已結清部分有個歷史紀錄
