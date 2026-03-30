@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
@@ -65,7 +65,7 @@ if (!isEnvConfigured) {
     } catch (e) {}
 }
 
-// --- Helper Functions ---
+// --- Helper Functions (包含強大的防崩潰機制) ---
 const formatMoney = (amount, currency = 'TWD') => {
   const num = Number(amount) || 0;
   return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: currency, maximumFractionDigits: 0 }).format(num);
@@ -78,10 +78,25 @@ const formatWeight = (grams, unit = 'tw_qian') => {
     return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) + '克';
 };
 
+// 安全解析變數，防止資料庫格式異常(如 Timestamp 物件)導致 React 渲染崩潰白畫面
+const safeString = (val) => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string' || typeof val === 'number') return String(val);
+    if (typeof val === 'object') {
+        if (typeof val.toDate === 'function') {
+            const d = val.toDate();
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+        return ''; 
+    }
+    return '';
+};
+
 const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString; 
+    const safeStr = safeString(dateString);
+    if (!safeStr) return '';
+    const d = new Date(safeStr);
+    if (isNaN(d.getTime())) return safeStr; 
     const days = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
     return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
 };
@@ -91,28 +106,29 @@ const getLocalYMD = (date = new Date()) => {
 };
 
 const getSortTime = (t) => {
-    if (!t) return Date.now(); 
+    if (!t) return 0; 
     if (typeof t.toMillis === 'function') return t.toMillis();
     if (t.seconds) return t.seconds * 1000;
-    return Date.now();
+    if (t instanceof Date) return t.getTime();
+    if (typeof t === 'number') return t;
+    return 0;
 };
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
-// 安全的日期月份格式化
 const safeFormatMonth = (dateObj) => {
     if (!dateObj || isNaN(dateObj.getTime())) return '';
     return `${dateObj.getFullYear()}年 ${dateObj.getMonth() + 1}月`;
 };
 
 
-// --- Firebase Init ---
+// --- Firebase Init (防止快速重整崩潰) ---
 let app, auth, db, googleProvider;
 const isConfigured = !!firebaseConfig.apiKey; 
 
 if (isConfigured) {
     try { 
-        app = initializeApp(firebaseConfig); 
+        app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
         auth = getAuth(app);
         db = getFirestore(app);
         googleProvider = new GoogleAuthProvider();
@@ -275,10 +291,10 @@ const LoginView = () => {
 
 // --- DEBT COMPONENTS ---
 const AddDebtModal = ({ onClose, onSave, initialData, bookId, showToast }) => {
-    const [person, setPerson] = useState(initialData?.person || '');
+    const [person, setPerson] = useState(safeString(initialData?.person));
     const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
-    const [date, setDate] = useState(initialData?.date || getLocalYMD());
-    const [note, setNote] = useState(initialData?.note || '');
+    const [date, setDate] = useState(safeString(initialData?.date) || getLocalYMD());
+    const [note, setNote] = useState(safeString(initialData?.note));
 
     const handleSubmit = () => {
         if (!person.trim()) return showToast("請輸入借款對象或項目", "error");
@@ -346,7 +362,7 @@ const AddRepaymentModal = ({ onClose, onSave, targetDebt, showToast }) => {
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800">新增還款</h2>
-                        <div className="text-[10px] text-gray-400 mt-0.5">對象：{targetDebt.person}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">對象：{safeString(targetDebt.person)}</div>
                     </div>
                     <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
                 </div>
@@ -376,13 +392,16 @@ const AddRepaymentModal = ({ onClose, onSave, targetDebt, showToast }) => {
 };
 
 const DebtDetailsModal = ({ onClose, debt, onDeleteRepayment }) => {
-    const sortedRepayments = [...(debt.repayments || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
+    const sortedRepayments = [...(debt.repayments || [])].sort((a,b) => {
+        const diff = String(b.date || '').localeCompare(String(a.date || ''));
+        return diff !== 0 ? diff : (b.createdAt - a.createdAt);
+    });
 
     return (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
              <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-[slideUp_0.2s_ease-out]">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h2 className="text-base font-black text-gray-800 flex items-center gap-2"><User size={18} className="text-blue-500"/> {debt.person} 的還款明細</h2>
+                    <h2 className="text-base font-black text-gray-800 flex items-center gap-2"><User size={18} className="text-blue-500"/> {safeString(debt.person)} 的還款明細</h2>
                     <button onClick={onClose} className="bg-white border border-gray-200 p-1.5 rounded-full hover:bg-gray-100"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 hide-scrollbar">
@@ -392,8 +411,8 @@ const DebtDetailsModal = ({ onClose, debt, onDeleteRepayment }) => {
                         sortedRepayments.map((r, i) => (
                             <div key={r.id} className={`flex justify-between items-center p-3 transition-colors ${i !== sortedRepayments.length - 1 ? 'border-b border-gray-100' : ''}`}>
                                 <div>
-                                    <div className="font-bold text-gray-800 text-sm">{r.date}</div>
-                                    {r.note && <div className="text-xs text-gray-400 mt-0.5">{r.note}</div>}
+                                    <div className="font-bold text-gray-800 text-sm">{safeString(r.date)}</div>
+                                    {r.note && <div className="text-xs text-gray-400 mt-0.5">{safeString(r.note)}</div>}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-black text-emerald-500">{formatMoney(r.amount)}</span>
@@ -459,7 +478,7 @@ const DebtBookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, cur
                                         <Landmark size={20}/>
                                     </div>
                                     <div>
-                                        <span className={`font-bold block ${isCurrent ? 'text-rose-800' : 'text-gray-700'}`}>{book.name}</span>
+                                        <span className={`font-bold block ${isCurrent ? 'text-rose-800' : 'text-gray-700'}`}>{safeString(book.name)}</span>
                                         {isCurrent && <span className="text-[10px] text-rose-500 font-bold bg-rose-100 px-2 py-0.5 rounded-full">目前使用中</span>}
                                     </div>
                                 </div>
@@ -498,6 +517,7 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     const containerRef = useRef(null);
     const [hoverData, setHoverData] = useState(null);
     
+    // 強制保護：確保傳入的資料一定是陣列，防止 slice/map 崩潰
     const chartData = useMemo(() => {
         if (period === '1d') return Array.isArray(intraday) && intraday.length > 0 ? intraday : [];
         if (!Array.isArray(data) || data.length === 0) return [];
@@ -507,11 +527,19 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     const prices = chartData.map(d => Number(d?.price) || 0);
     const minPrice = prices.length ? Math.min(...prices) * 0.999 : 0;
     const maxPrice = prices.length ? Math.max(...prices) * 1.001 : 100;
-    const range = maxPrice - minPrice || 100;
+    const range = maxPrice - minPrice || 100; // 避免除以零
     
-    const getY = (price) => 100 - (((Number(price) || 0) - minPrice) / range) * 100;
+    const getY = (price) => {
+        if (range === 0) return 50;
+        return 100 - (((Number(price) || 0) - minPrice) / range) * 100;
+    };
     const getX = (index) => (index / (Math.max(1, chartData.length - 1))) * 100;
-    const points = chartData.map((d, i) => [getX(i), getY(d?.price)]);
+    
+    // 防止座標出現 NaN 導致 SVG 繪製錯誤
+    const safeGetX = (i) => isNaN(getX(i)) ? 0 : getX(i);
+    const safeGetY = (p) => isNaN(getY(p)) ? 0 : getY(p);
+
+    const points = chartData.map((d, i) => [safeGetX(i), safeGetY(d?.price)]);
     const svgPath = (points) => points.reduce((acc, point, i) => i === 0 ? `M ${point[0]},${point[1]}` : `${acc} L ${point[0]},${point[1]}`, '');
     const pathD = points.length > 1 ? svgPath(points) : '';
     const fillPathD = points.length > 1 ? `${pathD} L 100,100 L 0,100 Z` : '';
@@ -519,8 +547,10 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
     const handleMouseMove = (e) => {
         if (!containerRef.current || chartData.length === 0) return;
         const rect = containerRef.current.getBoundingClientRect();
+        if (rect.width === 0) return;
         const x = e.clientX - rect.left; 
         let index = Math.round((x / rect.width) * (chartData.length - 1));
+        if (isNaN(index)) return;
         index = Math.max(0, Math.min(index, chartData.length - 1));
         setHoverData({ index, item: chartData[index], xPos: (index / (Math.max(1, chartData.length - 1))) * 100 });
     };
@@ -543,9 +573,9 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
                             <defs><linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#eab308" stopOpacity="0.3" /><stop offset="100%" stopColor="#eab308" stopOpacity="0" /></linearGradient></defs>
                             <path d={fillPathD} fill="url(#goldGradient)" />
                             <path d={pathD} fill="none" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                            {hoverData && (<g><line x1={hoverData.xPos} y1="0" x2={hoverData.xPos} y2="100" stroke="#d1d5db" strokeWidth="0.5" strokeDasharray="2" vectorEffect="non-scaling-stroke"/><circle cx={hoverData.xPos} cy={getY(hoverData.item?.price)} r="2.5" fill="#eab308" stroke="white" strokeWidth="1.5"/></g>)}
+                            {hoverData && (<g><line x1={hoverData.xPos} y1="0" x2={hoverData.xPos} y2="100" stroke="#d1d5db" strokeWidth="0.5" strokeDasharray="2" vectorEffect="non-scaling-stroke"/><circle cx={hoverData.xPos} cy={safeGetY(hoverData.item?.price)} r="2.5" fill="#eab308" stroke="white" strokeWidth="1.5"/></g>)}
                         </svg>
-                        {hoverData && (<div style={{ position: 'absolute', left: `${hoverData.xPos}%`, top: 0, transform: `translateX(${hoverData.xPos > 50 ? '-105%' : '5%'})`, pointerEvents: 'none' }} className="bg-gray-800/90 text-white p-2 rounded-lg shadow-xl text-xs z-10 backdrop-blur-sm border border-white/10"><div className="font-bold text-yellow-400 mb-0.5">{formatMoney(hoverData.item?.price)}</div><div className="text-gray-300 text-[10px]">{hoverData.item?.label || hoverData.item?.date}</div></div>)}
+                        {hoverData && (<div style={{ position: 'absolute', left: `${hoverData.xPos}%`, top: 0, transform: `translateX(${hoverData.xPos > 50 ? '-105%' : '5%'})`, pointerEvents: 'none' }} className="bg-gray-800/90 text-white p-2 rounded-lg shadow-xl text-xs z-10 backdrop-blur-sm border border-white/10"><div className="font-bold text-yellow-400 mb-0.5">{formatMoney(hoverData.item?.price)}</div><div className="text-gray-300 text-[10px]">{safeString(hoverData.item?.label) || safeString(hoverData.item?.date)}</div></div>)}
                     </div>}
                     <div className="flex justify-end gap-2 mt-4 bg-gray-50 p-1 rounded-xl inline-flex ml-auto w-full">
                         {['1d', '10d', '3m'].map(p => (<button key={p} onClick={(e)=>{e.stopPropagation(); setPeriod(p);}} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-bold transition-all ${period===p ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>{p==='1d'?'即時':p==='10d'?'近10日':'近3月'}</button>))}
@@ -557,12 +587,12 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
 };
 
 const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(safeString(initialData?.date) || getLocalYMD());
     const [unit, setUnit] = useState(initialData?.weight ? 'g' : 'g'); 
     const [weightInput, setWeightInput] = useState(initialData?.weight ? initialData.weight.toString() : '');
     const [totalCost, setTotalCost] = useState(initialData?.totalCost?.toString() ?? '');
-    const [location, setLocation] = useState(initialData?.location || '');
-    const [note, setNote] = useState(initialData?.note || '');
+    const [location, setLocation] = useState(safeString(initialData?.location));
+    const [note, setNote] = useState(safeString(initialData?.note));
     
     const handleSubmit = () => {
         let w = parseFloat(weightInput);
@@ -715,7 +745,7 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
 
 const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, showToast }) => {
     const [amount, setAmount] = useState(initialData?.amount || '');
-    const [date, setDate] = useState(initialData?.date || getLocalYMD());
+    const [date, setDate] = useState(safeString(initialData?.date) || getLocalYMD());
     const [type, setType] = useState(initialData?.type || 'expense');
     
     const availableCats = categories.filter(c => c.type === type);
@@ -727,8 +757,8 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
         }
     }, [type, categories]);
 
-    const [itemName, setItemName] = useState(initialData?.itemName || '');
-    const [note, setNote] = useState(initialData?.note || '');
+    const [itemName, setItemName] = useState(safeString(initialData?.itemName));
+    const [note, setNote] = useState(safeString(initialData?.note));
     const [showKeypad, setShowKeypad] = useState(false);
 
     const handleSubmit = () => {
@@ -772,7 +802,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                                 return (
                                     <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all ${category===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
                                         <Icon size={20} className="mb-1"/>
-                                        <span className="text-[10px] font-bold truncate w-full px-1 text-center">{c.name}</span>
+                                        <span className="text-[10px] font-bold truncate w-full px-1 text-center">{safeString(c.name)}</span>
                                     </button>
                                 );
                             })}
@@ -802,94 +832,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
     );
 };
 
-const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
-    const [isAdding, setIsAdding] = useState(false);
-    const [newBookName, setNewBookName] = useState('');
-    const [editingBook, setEditingBook] = useState(null); 
-    const [bookToDelete, setBookToDelete] = useState(null);
-    
-    if (!isOpen) return null;
-
-    const handleCreate = () => {
-        if(!newBookName.trim()) {
-            showToast("請輸入帳本名稱", "error");
-            return;
-        }
-        onSaveBook({ name: newBookName });
-        setNewBookName('');
-        setIsAdding(false);
-    };
-
-    const handleUpdate = () => {
-        if(!editingBook || !editingBook.name.trim()) return;
-        onSaveBook({ id: editingBook.id, name: editingBook.name });
-        setEditingBook(null);
-    };
-
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Book size={24} className="text-blue-600"/> 帳本管理</h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
-                </div>
-
-                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
-                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
-                    {books.map(book => {
-                        const isCurrent = book.id === currentBookId;
-                        const isEditingThis = editingBook?.id === book.id;
-
-                        if (isEditingThis) {
-                            return (
-                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
-                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"/>
-                                    <button onClick={handleUpdate} className="bg-blue-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors"><Check size={18}/></button>
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-blue-50/50 border-blue-400 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-200 hover:bg-blue-50/30'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors'}`}>
-                                        <Wallet size={20}/>
-                                    </div>
-                                    <div>
-                                        <span className={`font-bold block ${isCurrent ? 'text-blue-800' : 'text-gray-700'}`}>{book.name}</span>
-                                        {isCurrent && <span className="text-[10px] text-blue-500 font-bold bg-blue-100 px-2 py-0.5 rounded-full">目前使用中</span>}
-                                    </div>
-                                </div>
-                                <div className="flex gap-1 transition-opacity">
-                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-blue-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
-                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {isAdding ? (
-                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
-                        <label className="text-xs font-bold text-gray-500">建立新帳本</label>
-                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
-                        <div className="flex gap-2">
-                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
-                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 transition-all">新增</button>
-                        </div>
-                    </div>
-                ) : (
-                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center gap-2">
-                        <Plus size={20}/> 建立新帳本
-                    </button>
-                )}
-            </div>
-            
-            <ConfirmModal isOpen={!!bookToDelete} title="刪除帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有記帳紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
-        </div>
-    );
-};
-
+// --- CATEGORY MANAGER ---
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -936,7 +879,7 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
                                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white shadow-sm transition-colors ${activeTab === 'expense' ? 'text-red-500 group-hover:text-red-600' : 'text-green-500 group-hover:text-green-600'}`}>
                                                 <IconComp size={20}/>
                                             </div>
-                                            <span className="font-black text-base text-gray-700">{cat.name}</span>
+                                            <span className="font-black text-base text-gray-700">{safeString(cat.name)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button onClick={() => handleEdit(cat)} className="p-2.5 text-gray-400 hover:text-blue-600 bg-white border border-gray-100 hover:border-blue-200 rounded-xl shadow-sm transition-all active:scale-95"><Edit2 size={16}/></button>
@@ -956,6 +899,74 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
 
             {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
+        </div>
+    );
+};
+
+const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast }) => {
+    const [name, setName] = useState(safeString(initialData?.name));
+    const [type, setType] = useState(initialData?.type || defaultType);
+    const [icon, setIcon] = useState(initialData?.icon || (type === 'expense' ? 'shopping-bag' : 'wallet'));
+
+    useEffect(() => {
+        if (initialData) {
+            setName(safeString(initialData.name));
+            setType(initialData.type || defaultType);
+            setIcon(initialData.icon || (initialData.type === 'expense' ? 'shopping-bag' : 'wallet'));
+        } else {
+            setName('');
+            setType(defaultType);
+            setIcon(defaultType === 'expense' ? 'shopping-bag' : 'wallet');
+        }
+    }, [initialData, defaultType]);
+
+    const handleSubmit = () => {
+        if (!name.trim()) {
+            showToast("請輸入分類名稱", "error");
+            return;
+        }
+        onSave({ id: initialData?.id, name: name.trim(), icon, type });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[90] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white shrink-0">
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button onClick={() => { setType('expense'); if (!initialData) setIcon('shopping-bag'); }} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type === 'expense' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}>支出分類</button>
+                        <button onClick={() => { setType('income'); if (!initialData) setIcon('wallet'); }} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${type === 'income' ? 'bg-white text-green-500 shadow-sm' : 'text-gray-400'}`}>收入分類</button>
+                    </div>
+                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"><X size={20} /></button>
+                </div>
+
+                <div className="p-5 space-y-5 overflow-y-auto pb-8 hide-scrollbar">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">分類名稱</label>
+                        <input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="例如：早餐、投資..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">選擇圖示</label>
+                        <div className="grid grid-cols-6 gap-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 max-h-48 overflow-y-auto hide-scrollbar">
+                            {Object.keys(ICON_MAP).map(iconKey => {
+                                const IconComp = ICON_MAP[iconKey];
+                                return (
+                                    <button key={iconKey} onClick={()=>setIcon(iconKey)} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${icon === iconKey ? (type==='expense'?'bg-red-500 text-white shadow-md':'bg-green-500 text-white shadow-md') : 'bg-white text-gray-400 hover:bg-gray-100 shadow-sm border border-gray-100'}`}>
+                                        <IconComp size={20}/>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button onClick={handleSubmit} className={`w-full py-4 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-transform text-lg ${type==='expense'?'bg-red-500 shadow-red-200 hover:bg-red-600':'bg-green-500 shadow-green-200 hover:bg-green-600'}`}>
+                            {initialData ? '儲存修改' : '確認新增'}
+                        </button>
+                    </div>
+                </div>
+             </div>
         </div>
     );
 };
@@ -1223,10 +1234,10 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                                 <IconComp size={20}/>
                             </div>
                             <div className="flex flex-col justify-center flex-1 min-w-0 h-full">
-                                <div className="font-black text-gray-800 text-base truncate leading-tight">{item.itemName || cat?.name || '其他'}</div>
+                                <div className="font-black text-gray-800 text-base truncate leading-tight">{safeString(item.itemName) || safeString(cat?.name) || '其他'}</div>
                                 <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
-                                    <span className="truncate">{item.note || '無備註'}</span>
+                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold shrink-0">{safeString(cat?.name) || '其他'}</span>}
+                                    <span className="truncate">{safeString(item.note) || '無備註'}</span>
                                 </div>
                             </div>
                         </div>
@@ -1247,12 +1258,62 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
     );
 };
 
+const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
+    const [showSettings, setShowSettings] = useState(false);
+
+    return (
+        <>
+            {isOpen && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={onClose} />}
+            <div className={`fixed top-0 left-0 bottom-0 w-64 bg-gray-900 text-white z-[100] transform transition-transform duration-300 shadow-2xl flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="p-6 flex-1">
+                    <div className="flex items-center justify-between mb-10 mt-4 relative">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-xl border border-white/10">{safeString(user?.displayName)?.[0] || 'U'}</div>
+                            <div>
+                                <div className="font-bold text-sm tracking-wide max-w-[100px] truncate">{safeString(user?.displayName)}</div>
+                                <div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-xl transition-colors ${showSettings ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+                            <Settings size={20}/>
+                        </button>
+
+                        {showSettings && (
+                            <div className="absolute right-0 top-14 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeIn_0.2s]">
+                                <button onClick={() => { navigateTo('categories'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3">
+                                    <Tag size={16}/> 分類管理
+                                </button>
+                                <button onClick={() => { navigateTo('backup'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 border-t border-gray-700">
+                                    <Database size={16}/> 備份與還原
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
+                    <div className="space-y-2 mb-8">
+                        <button onClick={() => { navigateTo('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
+                        <button onClick={() => { navigateTo('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
+                        <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
+                        <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
+                        <button onClick={() => { navigateTo('debt'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'debt' ? 'bg-rose-500/20 text-rose-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Landmark size={20} /> <span className="font-bold">借貸還款</span></button>
+                        <button onClick={() => { navigateTo('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
+                    </div>
+                </div>
+                <div className="p-6 border-t border-white/5">
+                     <button onClick={onLogout} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors"><LogOut size={18}/> 安全登出</button>
+                </div>
+            </div>
+        </>
+    );
+};
+
 // --- MAIN APPLICATION SHELL ---
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [debtTab, setDebtTab] = useState('active');
+    const [debtTab, setDebtTab] = useState('active'); 
     
     // 全域 Toast 狀態
     const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -1277,7 +1338,6 @@ export default function App() {
         setHistoryStack(prev => prev.length > 1 ? prev.slice(0, -1) : ['home']);
     };
 
-    // PWA & Install state
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showInstallBtn, setShowInstallBtn] = useState(false);
     const [showIOSPrompt, setShowIOSPrompt] = useState(false);
@@ -1336,6 +1396,32 @@ export default function App() {
     const [showDebtDetails, setShowDebtDetails] = useState(false);
     const [activeDebt, setActiveDebt] = useState(null);
 
+    // 完全防呆的金價抓取函式 (獨立定義避免 useEffect 閉包問題)
+    const fetchGoldPrice = async () => {
+        setPriceLoading(true);
+        try {
+            const response = await fetch('/api/gold');
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.success) {
+                    setGoldPrice(Number(data.currentPrice) || 2880); 
+                    setGoldHistory(Array.isArray(data.history) ? data.history : []); 
+                    setGoldIntraday(Array.isArray(data.intraday) ? data.intraday : []);
+                    setPriceLoading(false); 
+                    return;
+                }
+            }
+            throw new Error("API failed");
+        } catch (e) { 
+            console.warn("Gold API fetch failed.", e);
+            setGoldPrice(2880); 
+            setGoldHistory([{date: getLocalYMD(), price: 2880, label: 'Today'}]); 
+            setGoldIntraday([]);
+        } finally { 
+            setPriceLoading(false); 
+        }
+    };
+
     useEffect(() => {
         if (!document.getElementById('tailwind-script')) {
             const script = document.createElement('script');
@@ -1346,7 +1432,6 @@ export default function App() {
         }
     }, []);
 
-    // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
     useEffect(() => {
         const metaTags = [
             { name: 'theme-color', content: '#f9fafb' }, 
@@ -1519,29 +1604,6 @@ export default function App() {
         return allDebts.filter(d => d.bookId === currentDebtBookId);
     }, [allDebts, currentDebtBookId]);
 
-    const fetchGoldPrice = async () => {
-        setPriceLoading(true);
-        try {
-            const response = await fetch('/api/gold');
-            if (response.ok) {
-                const data = await response.json();
-                if (data && data.success) {
-                    setGoldPrice(data.currentPrice || 2880); 
-                    setGoldHistory(Array.isArray(data.history) ? data.history : []); 
-                    setGoldIntraday(Array.isArray(data.intraday) ? data.intraday : []);
-                    return;
-                }
-            }
-            throw new Error("API responded with error");
-        } catch (e) { 
-            console.warn("Gold API fetch failed, using fallback data.");
-            setGoldPrice(2880); 
-            setGoldHistory([{date: getLocalYMD(), price: 2880, label: 'Today'}]); 
-            setGoldIntraday([]);
-        } finally { 
-            setPriceLoading(false); 
-        }
-    };
 
     const handleExpenseSwap = async (item1, item2) => {
         try {
@@ -1556,7 +1618,6 @@ export default function App() {
         }
     };
 
-    // --- Firebase CRUD Handlers ---
     const handleGoldSave = async (data) => {
         try {
             if (data.id) {
@@ -1741,9 +1802,10 @@ export default function App() {
     const goldProfit = goldCurrentVal - goldTotalCost;
     const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
 
+    // 歷史排序優化：強制轉換日期為字串再比較，避免異常格式導致崩潰
     const sortedGoldTransactions = useMemo(() => {
         return [...goldTransactions].sort((a,b) => {
-            const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
+            const dateDiff = safeString(b.date).localeCompare(safeString(a.date));
             if (dateDiff !== 0) return dateDiff;
             return getSortTime(b.createdAt) - getSortTime(a.createdAt);
         });
@@ -1752,8 +1814,8 @@ export default function App() {
     const currentMonthStats = useMemo(() => {
         const now = new Date();
         const thisMonth = expenses.filter(e => {
-            const safeDate = String(e.date || getLocalYMD());
-            const d = new Date(safeDate);
+            const safeDateStr = safeString(e.date) || getLocalYMD();
+            const d = new Date(safeDateStr);
             if (isNaN(d.getTime())) return false;
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
@@ -1765,8 +1827,8 @@ export default function App() {
     const pieChartData = useMemo(() => {
         const now = new Date();
         const thisMonthExpenses = expenses.filter(e => {
-            const safeDate = String(e.date || getLocalYMD());
-            const d = new Date(safeDate);
+            const safeDateStr = safeString(e.date) || getLocalYMD();
+            const d = new Date(safeDateStr);
             if (isNaN(d.getTime())) return false;
             return e.type === 'expense' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
@@ -1783,8 +1845,9 @@ export default function App() {
         
         let accumulated = 0;
         return sorted.map(([catId, amount], index) => {
-            const percent = total > 0 ? (amount / total) * 100 : 0;
-            const offset = 100 - accumulated;
+            const validAmount = Number(amount) || 0;
+            const percent = total > 0 ? (validAmount / total) * 100 : 0;
+            const offset = isNaN(accumulated) ? 100 : 100 - accumulated;
             accumulated += percent;
             return {
                 id: catId,
@@ -1803,7 +1866,7 @@ export default function App() {
         const currentRealMonth = getLocalYMD().substring(0, 7); 
 
         expenses.forEach(e => {
-            const safeDate = String(e.date || getLocalYMD());
+            const safeDate = safeString(e.date) || getLocalYMD();
             if (!safeDate.startsWith(currentRealMonth)) return; 
 
             if(!groups[safeDate]) groups[safeDate] = { date: safeDate, list: [], total: 0 };
@@ -1812,7 +1875,7 @@ export default function App() {
         });
         
         Object.values(groups).forEach(g => g.list.sort((a,b) => getSortTime(b.createdAt) - getSortTime(a.createdAt)));
-        return Object.values(groups).sort((a,b) => String(b.date).localeCompare(String(a.date)));
+        return Object.values(groups).sort((a,b) => safeString(b.date).localeCompare(safeString(a.date)));
     }, [expenses]);
 
     const debtStats = useMemo(() => {
@@ -1829,10 +1892,10 @@ export default function App() {
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${String(currentHistoryDate.getMonth() + 1).padStart(2, '0')}`;
     const currentHistoryRecords = useMemo(() => {
         return expenses.filter(e => {
-            const safeDate = String(e.date || getLocalYMD());
+            const safeDate = safeString(e.date) || getLocalYMD();
             return safeDate.startsWith(historyCurrentMonthKey);
         }).sort((a,b) => {
-            const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
+            const dateDiff = safeString(b.date).localeCompare(safeString(a.date));
             if (dateDiff !== 0) return dateDiff;
             return getSortTime(b.createdAt) - getSortTime(a.createdAt);
         });
@@ -1849,7 +1912,7 @@ export default function App() {
     const calendarDailyData = useMemo(() => {
         const data = {};
         expenses.forEach(e => {
-            const d = String(e.date || getLocalYMD()); 
+            const d = safeString(e.date) || getLocalYMD(); 
             if (!data[d]) data[d] = { hasIncome: false, hasExpense: false, list: [] };
             if (e.type === 'income') data[d].hasIncome = true;
             if (e.type === 'expense') data[d].hasExpense = true;
@@ -1922,7 +1985,7 @@ export default function App() {
                                 <ChevronDown size={14} className="text-gray-400"/>
                             </div>
                             <div className="text-[10px] text-gray-500 font-bold mt-1 tracking-wider">
-                                {currentView === 'debt' ? (currentDebtBook?.name || '請選擇帳本') : (currentBook?.name || '請選擇帳本')}
+                                {currentView === 'debt' ? (safeString(currentDebtBook?.name) || '請選擇帳本') : (safeString(currentBook?.name) || '請選擇帳本')}
                             </div>
                         </div>
                     ) : (
@@ -1949,9 +2012,6 @@ export default function App() {
                 </div>
              </div>
 
-             {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
-             {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
-
              {/* MAIN CONTENT AREA */}
              <div className="flex-1 overflow-hidden relative">
                  {/* === HOME DASHBOARD VIEW === */}
@@ -1961,7 +2021,7 @@ export default function App() {
                             <div className="flex justify-between items-center mb-6 relative z-10">
                                 <div className="flex items-center gap-2">
                                     <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Wallet size={18}/></div>
-                                    <span className="font-bold tracking-wide text-gray-800">{currentBook?.name || (books.length === 0 ? '目前無帳本' : '生活記帳')}</span>
+                                    <span className="font-bold tracking-wide text-gray-800">{safeString(currentBook?.name) || (books.length === 0 ? '目前無帳本' : '生活記帳')}</span>
                                 </div>
                                 <span className="text-xs font-bold text-gray-500 bg-white shadow-sm border border-gray-100 px-3 py-1.5 rounded-full">{new Date().getMonth()+1}月概況 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                             </div>
@@ -2170,181 +2230,80 @@ export default function App() {
                     </div>
                  )}
 
-                 {/* === GOLD VIEW === */}
-                 {currentView === 'gold' && (
-                    <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-4 pb-24 animate-[fadeIn_0.3s]">
-                        <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                             <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
-                             <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
-                             <div className="grid grid-cols-2 gap-4">
-                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
-                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
-                             </div>
-                             <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-sm">
-                                 <div className="flex flex-col"><span className="text-orange-100/80 text-[10px] font-bold">購入總成本</span><span className="font-black">{formatMoney(goldTotalCost)}</span></div>
-                                 <div className="flex flex-col text-right"><span className="text-orange-100/80 text-[10px] font-bold">平均成本</span><span className="font-black">{formatMoney(goldAvgCost)}<span className="text-[10px] font-normal"> /克</span></span></div>
-                             </div>
-                        </div>
-                        <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
-                        <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
-                        <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
-                            {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">目前尚無黃金紀錄</div> : 
-                             sortedGoldTransactions.map(t => (
-                                 <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
-                                     <div className="flex items-center gap-3">
-                                         <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
-                                         <div>
-                                             <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
-                                             <div className="text-[10px] text-gray-400 mt-0.5">{t.date} · 成本 {formatMoney(t.totalCost)}</div>
-                                         </div>
-                                     </div>
-                                     <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                            <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                            <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                            <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                            <button onClick={() => setGoldToDelete(t)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                        </div>
-                                     </div>
-                                 </div>
-                             ))
-                            }
-                        </div>
-                        {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} initialData={editingGold} showToast={showToast} />}
-                        <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
-                    </div>
-                 )}
-
-                 {/* === HISTORY VIEW (Swipeable & Tabs) === */}
-                 {currentView === 'history' && (
+                 {/* === CALENDAR VIEW === */}
+                 {currentView === 'calendar' && (
                      <div 
-                         id="history-scroll-container"
+                         id="calendar-scroll-container"
                          className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
                          onTouchStart={handleTouchStart}
-                         onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
+                         onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
                      >
-                         <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
-                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
-                             <div className="text-center select-none">
-                                 <h3 className="text-xl font-black text-gray-800 tracking-wide">{safeFormatMonth(currentHistoryDate)}</h3>
-                                 <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
+                         <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100">
+                             {/* Calendar Header */}
+                             <div className="flex justify-between items-center mb-6">
+                                  <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth - 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronLeft size={20}/></button>
+                                  <div className="text-lg font-black text-gray-800 tracking-wide select-none">
+                                      {calendarYear}年 {calendarMonth + 1}月
+                                  </div>
+                                  <button onClick={() => setCalendarDate(new Date(calendarYear, calendarMonth + 1, 1))} className="p-2 rounded-xl text-orange-500 hover:bg-orange-50 transition-colors"><ChevronRight size={20}/></button>
                              </div>
-                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
-                         </div>
-
-                         <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
-                             <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
-                             <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
-                         </div>
-
-                         {currentHistoryRecords.length === 0 ? (
-                             <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
-                                 <History size={40} className="mb-4 opacity-20"/>
-                                 <p className="text-base text-gray-600">這個月尚無紀錄</p>
-                                 <p className="text-xs font-normal mt-2 text-gray-400">（可左右滑動切換其他月份）</p>
+                             
+                             {/* Weekday headers */}
+                             <div className="grid grid-cols-7 gap-1 mb-3 text-center">
+                                 {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>)}
                              </div>
-                         ) : (
-                             <>
-                                 {historyTab === 'stats' && (
-                                     <div className="space-y-4 animate-[fadeIn_0.3s]">
-                                         <div className="grid grid-cols-2 gap-3">
-                                             <div className="bg-emerald-50 rounded-[1.5rem] p-5 border border-emerald-100 shadow-sm">
-                                                 <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
-                                                 <div className="text-2xl font-black text-emerald-700">{formatMoney(historyTotalIncome)}</div>
-                                             </div>
-                                             <div className="bg-rose-50 rounded-[1.5rem] p-5 border border-rose-100 shadow-sm">
-                                                 <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
-                                                 <div className="text-2xl font-black text-rose-700">{formatMoney(historyTotalExpense)}</div>
+                             
+                             {/* Days Grid */}
+                             <div className="grid grid-cols-7 gap-y-3 gap-x-1 text-center">
+                                 {calendarDays.map((day, idx) => {
+                                     if (day === null) return <div key={`empty-${idx}`} />;
+                                     const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                     const isSelected = calendarSelectedDate === dateStr;
+                                     const isToday = dateStr === getLocalYMD();
+                                     const hasInc = calendarDailyData[dateStr]?.hasIncome;
+                                     const hasExp = calendarDailyData[dateStr]?.hasExpense;
+
+                                     return (
+                                         <div key={dateStr} onClick={() => setCalendarSelectedDate(dateStr)} className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-2xl cursor-pointer transition-all ${isSelected ? 'bg-orange-500 text-white shadow-md shadow-orange-200' : isToday ? 'bg-orange-50 text-orange-800' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                             <span className={`text-sm font-bold ${isSelected ? 'text-white' : ''}`}>{day}</span>
+                                             <div className="flex gap-1 mt-1 h-1.5 justify-center">
+                                                 {hasExp && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-rose-400'}`}></div>}
+                                                 {hasInc && <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`}></div>}
                                              </div>
                                          </div>
+                                     )
+                                 })}
+                             </div>
+                         </div>
 
-                                         <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
-                                                 <PieChart size={16} className="text-purple-400"/> 分類支出排名
-                                             </h4>
-                                             <div className="space-y-4">
-                                                 {(() => {
-                                                     const catTotals = {};
-                                                     currentHistoryRecords.forEach(item => {
-                                                         if (item.type === 'expense') {
-                                                             const catId = item.category || 'other';
-                                                             catTotals[catId] = (catTotals[catId] || 0) + (Number(item.amount) || 0);
-                                                         }
-                                                     });
-                                                     const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
-                                                     
-                                                     if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl font-bold">本月無支出</div>;
-                                                     
-                                                     return sortedCats.map(([catId, amount]) => {
-                                                         const cat = categories.find(c => c.id === catId);
-                                                         const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                                         const percent = historyTotalExpense > 0 ? ((amount / historyTotalExpense) * 100).toFixed(1) : 0;
-                                                         
-                                                         return (
-                                                             <div key={catId} className="flex justify-between items-center group">
-                                                                 <div className="flex items-center gap-3">
-                                                                     <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-inner group-hover:bg-purple-50 group-hover:text-purple-500 group-hover:border-purple-100 transition-colors">
-                                                                         <IconComp size={20}/>
-                                                                     </div>
-                                                                     <div>
-                                                                         <div className="text-sm font-black text-gray-700">{cat?.name || '其他'}</div>
-                                                                         <div className="text-[11px] text-gray-400 font-bold mt-0.5">{percent}%</div>
-                                                                     </div>
-                                                                 </div>
-                                                                 <span className="font-black text-lg text-gray-800">{formatMoney(amount)}</span>
-                                                             </div>
-                                                         )
-                                                     });
-                                                 })()}
-                                             </div>
-                                         </div>
-                                     </div>
-                                 )}
-
-                                 {historyTab === 'list' && (
-                                     <div className="space-y-3 animate-[fadeIn_0.3s]">
-                                         {currentHistoryRecords.map((item, i) => {
-                                              const cat = categories.find(c=>c.id===item.category);
-                                              const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                              return (
-                                                 <div key={item.id} className={`h-[88px] px-4 flex justify-between items-center rounded-[1.25rem] bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-colors hover:border-purple-200 w-full`}>
-                                                     <div className="flex items-center gap-4 flex-1 min-w-0 h-full">
-                                                         <div className="text-xs font-bold text-gray-400 w-11 shrink-0 text-center flex flex-col items-center justify-center bg-gray-50 rounded-xl py-2 border border-gray-100 shadow-inner">
-                                                             <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
-                                                             <div className="text-[8px] uppercase">Day</div>
-                                                         </div>
-                                                         <div className="flex items-center gap-3 flex-1 min-w-0 h-full">
-                                                            <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
-                                                            <div className="flex-col justify-center flex-1 min-w-0">
-                                                                <div className="font-black text-gray-800 text-base truncate leading-tight">{item.itemName || cat?.name || '其他'}</div>
-                                                                <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-                                                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
-                                                                    <span className="truncate">{item.note || '無備註'}</span>
-                                                                </div>
-                                                            </div>
-                                                         </div>
-                                                     </div>
-                                                     <div className="flex items-center gap-4 shrink-0 pl-2 h-full">
-                                                        <div className="text-right">
-                                                            <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 border-l border-gray-100 pl-3 justify-center h-full">
-                                                            <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                                            <button onClick={() => setExpenseToDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                                        </div>
-                                                     </div>
-                                                 </div>
-                                             )
-                                         })}
-                                     </div>
-                                 )}
-                             </>
-                         )}
+                         {/* Selected Day Details */}
+                         <div>
+                             <div className="flex justify-between items-end px-2 mb-3">
+                                 <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+                                     <Calendar size={16} className="text-orange-400"/>
+                                     {calendarSelectedDate.replace(/-/g, '/')} 紀錄
+                                     {selectedDayRecords.length > 1 && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full animate-pulse ml-1 flex items-center gap-0.5"><ArrowUpDown size={10}/> 長按可拖曳排序</span>}
+                                 </div>
+                                 <div className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-lg font-bold border border-gray-200">{selectedDayRecords.length} 筆</div>
+                             </div>
+                             
+                             {selectedDayRecords.length === 0 ? (
+                                 <div className="bg-white rounded-[2rem] border border-gray-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] py-12 text-center text-gray-400 text-sm font-bold flex flex-col items-center gap-3">
+                                     <Coffee size={32} className="opacity-20" />
+                                     當日無收支紀錄
+                                 </div>
+                             ) : (
+                                 <SortableDayGroup 
+                                     list={selectedDayRecords}
+                                     categories={categories}
+                                     onSwap={handleExpenseSwap}
+                                     setEditingExpense={setEditingExpense}
+                                     setShowExpenseAdd={setShowExpenseAdd}
+                                     setExpenseToDelete={setExpenseToDelete}
+                                     scrollContainerId="calendar-scroll-container"
+                                 />
+                             )}
+                         </div>
                          {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
                          <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                      </div>
