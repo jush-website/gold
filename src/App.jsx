@@ -2464,4 +2464,3 @@ export default function App() {
         </div>
     );
 }
-這是目前系統，我想在借貸還款的地方在已結清部分有個歷史紀錄
