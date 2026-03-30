@@ -774,94 +774,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
     );
 };
 
-const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
-    const [isAdding, setIsAdding] = useState(false);
-    const [newBookName, setNewBookName] = useState('');
-    const [editingBook, setEditingBook] = useState(null); 
-    const [bookToDelete, setBookToDelete] = useState(null);
-    
-    if (!isOpen) return null;
-
-    const handleCreate = () => {
-        if(!newBookName.trim()) {
-            showToast("請輸入帳本名稱", "error");
-            return;
-        }
-        onSaveBook({ name: newBookName });
-        setNewBookName('');
-        setIsAdding(false);
-    };
-
-    const handleUpdate = () => {
-        if(!editingBook || !editingBook.name.trim()) return;
-        onSaveBook({ id: editingBook.id, name: editingBook.name });
-        setEditingBook(null);
-    };
-
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
-            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Book size={24} className="text-blue-600"/> 帳本管理</h3>
-                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
-                </div>
-
-                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
-                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
-                    {books.map(book => {
-                        const isCurrent = book.id === currentBookId;
-                        const isEditingThis = editingBook?.id === book.id;
-
-                        if (isEditingThis) {
-                            return (
-                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
-                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"/>
-                                    <button onClick={handleUpdate} className="bg-blue-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors"><Check size={18}/></button>
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-blue-50/50 border-blue-400 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-200 hover:bg-blue-50/30'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors'}`}>
-                                        <Wallet size={20}/>
-                                    </div>
-                                    <div>
-                                        <span className={`font-bold block ${isCurrent ? 'text-blue-800' : 'text-gray-700'}`}>{book.name}</span>
-                                        {isCurrent && <span className="text-[10px] text-blue-500 font-bold bg-blue-100 px-2 py-0.5 rounded-full">目前使用中</span>}
-                                    </div>
-                                </div>
-                                <div className="flex gap-1 transition-opacity">
-                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-blue-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
-                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {isAdding ? (
-                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
-                        <label className="text-xs font-bold text-gray-500">建立新帳本</label>
-                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
-                        <div className="flex gap-2">
-                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
-                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 transition-all">新增</button>
-                        </div>
-                    </div>
-                ) : (
-                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center gap-2">
-                        <Plus size={20}/> 建立新帳本
-                    </button>
-                )}
-            </div>
-            
-            <ConfirmModal isOpen={!!bookToDelete} title="刪除帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有記帳紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
-        </div>
-    );
-};
-
+// --- CATEGORY MANAGER ---
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -928,117 +841,6 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
 
             {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
-        </div>
-    );
-};
-
-const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, categories, allDebts, user, appId, db, showToast }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    
-    const handleExport = () => {
-        const data = { goldTransactions, books, debtBooks, allExpenses, categories, debts: allDebts };
-        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); 
-        a.href = url; 
-        a.download = `我的記帳本_備份_${new Date().toISOString().split('T')[0]}.json`; 
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast("資料已成功匯出");
-    };
-
-    const handleImport = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) {
-            e.target.value = ''; 
-            return;
-        }
-        
-        setIsLoading(true);
-        const reader = new FileReader();
-        
-        reader.onload = async (event) => {
-            try {
-                const data = JSON.parse(event.target.result);
-                if (!data.books && !data.allExpenses && !data.goldTransactions && !data.debts && !data.debtBooks) {
-                    throw new Error("無效的備份檔案格式");
-                }
-
-                const importCollection = async (collectionName, items) => {
-                    if (!items || !Array.isArray(items)) return; 
-                    const promises = items.map(async (item) => {
-                        if (!item || !item.id) return; 
-                        const { id, ...payload } = item;
-                        try {
-                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, collectionName, String(id));
-                            await setDoc(docRef, payload);
-                        } catch (err) {
-                            console.warn(`寫入 ${collectionName} 的紀錄 ${id} 時發生錯誤:`, err);
-                        }
-                    });
-                    await Promise.all(promises);
-                };
-
-                await importCollection('gold_transactions', data.goldTransactions);
-                await importCollection('account_books', data.books);
-                await importCollection('debt_books', data.debtBooks);
-                await importCollection('expense_transactions', data.allExpenses);
-                await importCollection('expense_categories', data.categories);
-                await importCollection('debts', data.debts);
-
-                showToast("資料還原成功！正在重新載入...");
-                setTimeout(() => window.location.reload(), 1500); 
-
-            } catch (error) {
-                console.error("還原錯誤:", error);
-                showToast(`還原失敗: ${error.message}`, "error");
-            } finally {
-                setIsLoading(false);
-                e.target.value = ''; 
-            }
-        };
-        
-        reader.onerror = () => {
-            showToast("讀取檔案失敗，請檢查檔案是否損毀。", "error");
-            setIsLoading(false);
-            e.target.value = '';
-        };
-        
-        reader.readAsText(file);
-    };
-
-    return (
-        <div className="p-4 space-y-6 animate-[fadeIn_0.3s]">
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center mb-4">
-                    <Database size={24} />
-                </div>
-                <h2 className="text-xl font-black text-gray-800 mb-2">備份與還原</h2>
-                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-                    您可以將所有的記帳、黃金存摺、各類帳本、分類以及借款資料匯出為一個檔案保存在手機或電腦中，以便更換設備或需要時進行還原。
-                </p>
-
-                <div className="space-y-4">
-                    <button onClick={handleExport} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-md shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2">
-                        <DownloadCloud size={20} /> 匯出資料 (備份下載)
-                    </button>
-
-                    <div className="relative">
-                        <input 
-                            type="file" 
-                            accept=".json"
-                            onClick={(e) => { e.target.value = null; }} 
-                            onChange={handleImport}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            disabled={isLoading}
-                        />
-                        <button disabled={isLoading} className="w-full py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center gap-2">
-                            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><UploadCloud size={20} /> 匯入資料 (選擇檔案還原)</>}
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
@@ -1217,63 +1019,12 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
     );
 };
 
-const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
-    const [showSettings, setShowSettings] = useState(false);
-
-    return (
-        <>
-            {isOpen && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={onClose} />}
-            <div className={`fixed top-0 left-0 bottom-0 w-64 bg-gray-900 text-white z-[100] transform transition-transform duration-300 shadow-2xl flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                <div className="p-6 flex-1">
-                    {/* 優化：將設定齒輪與使用者資訊放一起，並加入下拉選單 */}
-                    <div className="flex items-center justify-between mb-10 mt-4 relative">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-xl border border-white/10">{user?.displayName?.[0] || 'U'}</div>
-                            <div>
-                                <div className="font-bold text-sm tracking-wide max-w-[100px] truncate">{user?.displayName}</div>
-                                <div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div>
-                            </div>
-                        </div>
-                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-xl transition-colors ${showSettings ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                            <Settings size={20}/>
-                        </button>
-
-                        {showSettings && (
-                            <div className="absolute right-0 top-14 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeIn_0.2s]">
-                                <button onClick={() => { navigateTo('categories'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3">
-                                    <Tag size={16}/> 分類管理
-                                </button>
-                                <button onClick={() => { navigateTo('backup'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 border-t border-gray-700">
-                                    <Database size={16}/> 備份與還原
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* 優化：將功能選單重新群組排列 */}
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
-                    <div className="space-y-2 mb-8">
-                        <button onClick={() => { navigateTo('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
-                        <button onClick={() => { navigateTo('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
-                        <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
-                        <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
-                        <button onClick={() => { navigateTo('debt'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'debt' ? 'bg-rose-500/20 text-rose-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Landmark size={20} /> <span className="font-bold">借貸還款</span></button>
-                        <button onClick={() => { navigateTo('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
-                    </div>
-                </div>
-                <div className="p-6 border-t border-white/5">
-                     <button onClick={onLogout} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors"><LogOut size={18}/> 安全登出</button>
-                </div>
-            </div>
-        </>
-    );
-};
-
 // --- MAIN APPLICATION SHELL ---
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [debtTab, setDebtTab] = useState('active'); // 'active' | 'settled'
     
     // 全域 Toast 狀態
     const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -1761,14 +1512,12 @@ export default function App() {
         } catch (e) { showToast(`移除失敗: ${e.message}`, "error"); }
     };
 
-
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const goldCurrentVal = goldTotalWeight * goldPrice;
     const goldProfit = goldCurrentVal - goldTotalCost;
     const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
 
-    // 優化：使用 localeCompare 安全比對日期字串，避免舊資料 Date 解析錯誤導致崩潰
     const sortedGoldTransactions = useMemo(() => {
         return [...goldTransactions].sort((a,b) => {
             const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
@@ -1830,7 +1579,6 @@ export default function App() {
 
         expenses.forEach(e => {
             const safeDate = e.date || getLocalYMD();
-            // 優化：生活記帳主頁面只顯示與現實時間同月份的紀錄，避免清單無限增長
             if (!safeDate.startsWith(currentRealMonth)) return; 
 
             if(!groups[safeDate]) groups[safeDate] = { date: safeDate, list: [], total: 0 };
@@ -1859,7 +1607,6 @@ export default function App() {
             const safeDate = e.date || getLocalYMD();
             return safeDate.startsWith(historyCurrentMonthKey);
         }).sort((a,b) => {
-            // 優化：使用 localeCompare 安全比對日期字串
             const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
             if (dateDiff !== 0) return dateDiff;
             return getSortTime(b.createdAt) - getSortTime(a.createdAt);
@@ -1960,7 +1707,7 @@ export default function App() {
 
                 <div className="w-[80px] flex justify-end gap-2 items-center shrink-0">
                     {currentView === 'home' && (
-                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-95 transition-transform" title="收支日曆">
+                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-scale-95 transition-transform" title="收支日曆">
                             <Calendar size={18}/>
                         </button>
                     )}
@@ -1976,9 +1723,6 @@ export default function App() {
                     )}
                 </div>
              </div>
-
-             {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
-             {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
 
              {/* MAIN CONTENT AREA */}
              <div className="flex-1 overflow-hidden relative">
@@ -2064,7 +1808,6 @@ export default function App() {
                                     setEditingExpense(null); 
                                     setShowExpenseAdd(true); 
                                 }} className="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={18}/> 記一筆</button>
-                                {/* 優化：分類管理獨立 Icon 放於記一筆按鈕右側 */}
                                 <button onClick={() => navigateTo('categories')} className="px-5 bg-white text-gray-600 border border-gray-200 rounded-2xl font-bold flex items-center justify-center shadow-sm hover:bg-gray-50 active:scale-95 transition-transform" title="分類管理">
                                     <Tag size={20} />
                                 </button>
@@ -2126,49 +1869,71 @@ export default function App() {
                             }} className="w-full bg-rose-500 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-rose-500/30 active:scale-95 transition-transform"><Plus size={18}/> 新增借款紀錄</button>
                         </div>
                         
-                        <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-4 pt-2">
-                            {debts.length === 0 ? (
-                                <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Landmark size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">目前無任何借貸紀錄</div></div>
-                            ) : debts.map(debt => {
-                                const repaid = (debt.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
-                                const remaining = debt.amount - repaid;
-                                const progress = debt.amount > 0 ? Math.min(100, (repaid / debt.amount) * 100) : 0;
-                                const isSettled = remaining <= 0;
+                        {(() => {
+                            const activeDebts = debts.filter(d => {
+                                const repaid = (d.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
+                                return (d.amount - repaid) > 0;
+                            });
+                            const settledDebts = debts.filter(d => {
+                                const repaid = (d.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
+                                return (d.amount - repaid) <= 0;
+                            });
+                            const displayDebts = debtTab === 'active' ? activeDebts : settledDebts;
 
-                                return (
-                                    <div key={debt.id} className={`bg-white rounded-3xl p-4 transition-all duration-300 border ${isSettled ? 'border-emerald-200 bg-emerald-50/20 shadow-sm' : 'border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] hover:shadow-md'}`}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSettled ? 'bg-emerald-100 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}><User size={20}/></div>
-                                                <div>
-                                                    <div className="font-black text-gray-800 text-base">{debt.person}</div>
-                                                    <div className="text-[10px] text-gray-400 mt-0.5">{debt.date} {debt.note && `· ${debt.note}`}</div>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => setDebtToDelete(debt)} className="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-full hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
-                                        </div>
-
-                                        <div className="mb-4">
-                                            <div className="flex justify-between text-xs font-bold mb-1.5">
-                                                <span className={`${isSettled ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {isSettled ? '已結清' : `待還 ${formatMoney(remaining)}`}
-                                                </span>
-                                                <span className="text-gray-400">{formatMoney(repaid)} / {formatMoney(debt.amount)}</span>
-                                            </div>
-                                            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
-                                                <div className={`h-full rounded-full transition-all duration-1000 ${isSettled ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{width: `${progress}%`}}></div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-2 pt-3 border-t border-gray-50">
-                                            <button disabled={isSettled} onClick={() => { setActiveDebt(debt); setShowRepaymentAdd(true); }} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isSettled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm hover:bg-emerald-100'}`}>新增還款</button>
-                                            <button onClick={() => { setActiveDebt(debt); setShowDebtDetails(true); }} className="flex-1 py-2.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100 rounded-xl font-bold text-sm transition-transform active:scale-95 shadow-sm">查看明細 ({(debt.repayments||[]).length})</button>
-                                            <button onClick={() => { setEditingDebt(debt); setShowDebtAdd(true); }} className="px-3 bg-gray-50 text-gray-500 hover:text-blue-600 border border-gray-100 hover:bg-blue-50 rounded-xl transition-colors shadow-sm"><Edit2 size={16}/></button>
-                                        </div>
+                            return (
+                                <>
+                                    <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 shrink-0 mx-4 mb-2">
+                                        <button onClick={() => setDebtTab('active')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${debtTab === 'active' ? 'bg-rose-50 text-rose-600 shadow-sm border border-rose-100' : 'text-gray-400 hover:bg-gray-50'}`}>未結清 ({activeDebts.length})</button>
+                                        <button onClick={() => setDebtTab('settled')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${debtTab === 'settled' ? 'bg-emerald-50 text-emerald-600 shadow-sm border border-emerald-100' : 'text-gray-400 hover:bg-gray-50'}`}>歷史紀錄 ({settledDebts.length})</button>
                                     </div>
-                                )
-                            })}
-                        </div>
+
+                                    <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-4 pt-1">
+                                        {displayDebts.length === 0 ? (
+                                            <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Landmark size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">{debtTab === 'active' ? '目前無待還款紀錄' : '目前無已結清紀錄'}</div></div>
+                                        ) : displayDebts.map(debt => {
+                                            const repaid = (debt.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
+                                            const remaining = debt.amount - repaid;
+                                            const progress = debt.amount > 0 ? Math.min(100, (repaid / debt.amount) * 100) : 0;
+                                            const isSettled = remaining <= 0;
+
+                                            return (
+                                                <div key={debt.id} className={`bg-white rounded-3xl p-4 transition-all duration-300 border ${isSettled ? 'border-emerald-200 bg-emerald-50/20 shadow-sm' : 'border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.03)] hover:shadow-md'}`}>
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isSettled ? 'bg-emerald-100 text-emerald-500' : 'bg-rose-100 text-rose-500'}`}><User size={20}/></div>
+                                                            <div>
+                                                                <div className="font-black text-gray-800 text-base">{debt.person}</div>
+                                                                <div className="text-[10px] text-gray-400 mt-0.5">{debt.date} {debt.note && `· ${debt.note}`}</div>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => setDebtToDelete(debt)} className="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-full hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
+                                                    </div>
+
+                                                    <div className="mb-4">
+                                                        <div className="flex justify-between text-xs font-bold mb-1.5">
+                                                            <span className={`${isSettled ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                                {isSettled ? '已結清' : `待還 ${formatMoney(remaining)}`}
+                                                            </span>
+                                                            <span className="text-gray-400">{formatMoney(repaid)} / {formatMoney(debt.amount)}</span>
+                                                        </div>
+                                                        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden shadow-inner">
+                                                            <div className={`h-full rounded-full transition-all duration-1000 ${isSettled ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{width: `${progress}%`}}></div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex gap-2 pt-3 border-t border-gray-50">
+                                                        <button disabled={isSettled} onClick={() => { setActiveDebt(debt); setShowRepaymentAdd(true); }} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-transform active:scale-95 ${isSettled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm hover:bg-emerald-100'}`}>新增還款</button>
+                                                        <button onClick={() => { setActiveDebt(debt); setShowDebtDetails(true); }} className="flex-1 py-2.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100 rounded-xl font-bold text-sm transition-transform active:scale-95 shadow-sm">查看明細 ({(debt.repayments||[]).length})</button>
+                                                        <button onClick={() => { setEditingDebt(debt); setShowDebtAdd(true); }} className="px-3 bg-gray-50 text-gray-500 hover:text-blue-600 border border-gray-100 hover:bg-blue-50 rounded-xl transition-colors shadow-sm"><Edit2 size={16}/></button>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </>
+                            );
+                        })()}
+                        
                         {showDebtAdd && <AddDebtModal onClose={() => setShowDebtAdd(false)} onSave={handleDebtSave} initialData={editingDebt} bookId={currentDebtBookId} showToast={showToast} />}
                         {showRepaymentAdd && <AddRepaymentModal onClose={() => setShowRepaymentAdd(false)} onSave={handleRepaymentSave} targetDebt={activeDebt} showToast={showToast} />}
                         {showDebtDetails && <DebtDetailsModal onClose={() => setShowDebtDetails(false)} debt={activeDebt} onDeleteRepayment={handleRepaymentDelete} />}
@@ -2255,187 +2020,7 @@ export default function App() {
                          <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
                      </div>
                  )}
-
-                 {/* === GOLD VIEW === */}
-                 {currentView === 'gold' && (
-                    <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-4 pb-24 animate-[fadeIn_0.3s]">
-                        <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                             <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
-                             <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
-                             <div className="grid grid-cols-2 gap-4">
-                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
-                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
-                             </div>
-                             <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-sm">
-                                 <div className="flex flex-col"><span className="text-orange-100/80 text-[10px] font-bold">購入總成本</span><span className="font-black">{formatMoney(goldTotalCost)}</span></div>
-                                 <div className="flex flex-col text-right"><span className="text-orange-100/80 text-[10px] font-bold">平均成本</span><span className="font-black">{formatMoney(goldAvgCost)}<span className="text-[10px] font-normal"> /克</span></span></div>
-                             </div>
-                        </div>
-                        <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
-                        <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
-                        <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
-                        <div className="space-y-3">
-                            <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
-                            {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">目前尚無黃金紀錄</div> : 
-                             sortedGoldTransactions.map(t => (
-                                 <div key={t.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center shadow-sm transition-all">
-                                     <div className="flex items-center gap-3">
-                                         <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 font-bold"><Scale size={18}/></div>
-                                         <div>
-                                             <div className="font-bold text-gray-800">{formatWeight(t.weight)}</div>
-                                             <div className="text-[10px] text-gray-400 mt-0.5">{t.date} · 成本 {formatMoney(t.totalCost)}</div>
-                                         </div>
-                                     </div>
-                                     <div className="flex items-center gap-3">
-                                        <div className="text-right">
-                                            <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                            <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
-                                        </div>
-                                        <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
-                                            <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                            <button onClick={() => setGoldToDelete(t)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                        </div>
-                                     </div>
-                                 </div>
-                             ))
-                            }
-                        </div>
-                        {showGoldAdd && <AddGoldModal onClose={()=>setShowGoldAdd(false)} onSave={handleGoldSave} initialData={editingGold} showToast={showToast} />}
-                        <ConfirmModal isOpen={!!goldToDelete} title="刪除黃金紀錄" message="確定要刪除這筆黃金紀錄嗎？此動作無法復原。" onConfirm={() => { handleGoldDelete(goldToDelete?.id); setGoldToDelete(null); }} onCancel={() => setGoldToDelete(null)} />
-                    </div>
-                 )}
-
-                 {/* === HISTORY VIEW (Swipeable & Tabs) === */}
-                 {currentView === 'history' && (
-                     <div 
-                         id="history-scroll-container"
-                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
-                         onTouchStart={handleTouchStart}
-                         onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
-                     >
-                         <div className="flex justify-between items-center bg-white p-3 rounded-3xl shadow-[0_4px_15px_rgba(0,0,0,0.03)] border border-gray-100">
-                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronLeft size={24}/></button>
-                             <div className="text-center select-none">
-                                 <h3 className="text-xl font-black text-gray-800 tracking-wide">{formatMonth(currentHistoryDate.toISOString())}</h3>
-                                 <div className="text-[10px] font-bold text-gray-400 mt-1 flex items-center justify-center gap-1">左右滑動切換 <ArrowLeft size={10}/><ArrowRight size={10}/></div>
-                             </div>
-                             <button onClick={() => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-3 rounded-2xl text-purple-600 hover:bg-purple-50 hover:shadow-sm transition-all"><ChevronRight size={24}/></button>
-                         </div>
-
-                         <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
-                             <button onClick={() => setHistoryTab('stats')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'stats' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>統計分析</button>
-                             <button onClick={() => setHistoryTab('list')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${historyTab === 'list' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>交易明細</button>
-                         </div>
-
-                         {currentHistoryRecords.length === 0 ? (
-                             <div className="text-center py-20 text-gray-400 font-bold flex flex-col items-center">
-                                 <History size={40} className="mb-4 opacity-20"/>
-                                 <p className="text-base text-gray-600">這個月尚無紀錄</p>
-                                 <p className="text-xs font-normal mt-2 text-gray-400">（可左右滑動切換其他月份）</p>
-                             </div>
-                         ) : (
-                             <>
-                                 {historyTab === 'stats' && (
-                                     <div className="space-y-4 animate-[fadeIn_0.3s]">
-                                         <div className="grid grid-cols-2 gap-3">
-                                             <div className="bg-emerald-50 rounded-[1.5rem] p-5 border border-emerald-100 shadow-sm">
-                                                 <div className="text-xs font-bold text-emerald-600/70 mb-1">當月總收入</div>
-                                                 <div className="text-2xl font-black text-emerald-700">{formatMoney(historyTotalIncome)}</div>
-                                             </div>
-                                             <div className="bg-rose-50 rounded-[1.5rem] p-5 border border-rose-100 shadow-sm">
-                                                 <div className="text-xs font-bold text-rose-600/70 mb-1">當月總支出</div>
-                                                 <div className="text-2xl font-black text-rose-700">{formatMoney(historyTotalExpense)}</div>
-                                             </div>
-                                         </div>
-
-                                         <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 flex items-center gap-2">
-                                                 <PieChart size={16} className="text-purple-400"/> 分類支出排名
-                                             </h4>
-                                             <div className="space-y-4">
-                                                 {(() => {
-                                                     const catTotals = {};
-                                                     currentHistoryRecords.forEach(item => {
-                                                         if (item.type === 'expense') {
-                                                             const catId = item.category || 'other';
-                                                             catTotals[catId] = (catTotals[catId] || 0) + (Number(item.amount) || 0);
-                                                         }
-                                                     });
-                                                     const sortedCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
-                                                     
-                                                     if (sortedCats.length === 0) return <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-2xl font-bold">本月無支出</div>;
-                                                     
-                                                     return sortedCats.map(([catId, amount]) => {
-                                                         const cat = categories.find(c => c.id === catId);
-                                                         const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                                         const percent = historyTotalExpense > 0 ? ((amount / historyTotalExpense) * 100).toFixed(1) : 0;
-                                                         
-                                                         return (
-                                                             <div key={catId} className="flex justify-between items-center group">
-                                                                 <div className="flex items-center gap-3">
-                                                                     <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-500 shadow-inner group-hover:bg-purple-50 group-hover:text-purple-500 group-hover:border-purple-100 transition-colors">
-                                                                         <IconComp size={20}/>
-                                                                     </div>
-                                                                     <div>
-                                                                         <div className="text-sm font-black text-gray-700">{cat?.name || '其他'}</div>
-                                                                         <div className="text-[11px] text-gray-400 font-bold mt-0.5">{percent}%</div>
-                                                                     </div>
-                                                                 </div>
-                                                                 <span className="font-black text-lg text-gray-800">{formatMoney(amount)}</span>
-                                                             </div>
-                                                         )
-                                                     });
-                                                 })()}
-                                             </div>
-                                         </div>
-                                     </div>
-                                 )}
-
-                                 {historyTab === 'list' && (
-                                     <div className="space-y-3 animate-[fadeIn_0.3s]">
-                                         {currentHistoryRecords.map((item, i) => {
-                                              const cat = categories.find(c=>c.id===item.category);
-                                              const IconComp = ICON_MAP[cat?.icon] || Tag;
-                                              return (
-                                                 <div key={item.id} className={`h-[88px] px-4 flex justify-between items-center rounded-[1.25rem] bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-colors hover:border-purple-200 w-full`}>
-                                                     <div className="flex items-center gap-4 flex-1 min-w-0 h-full">
-                                                         <div className="text-xs font-bold text-gray-400 w-11 shrink-0 text-center flex flex-col items-center justify-center bg-gray-50 rounded-xl py-2 border border-gray-100 shadow-inner">
-                                                             <div className="text-xl text-gray-800 leading-none mb-0.5 font-black">{new Date(item.date).getDate()}</div>
-                                                             <div className="text-[8px] uppercase">Day</div>
-                                                         </div>
-                                                         <div className="flex items-center gap-3 flex-1 min-w-0 h-full">
-                                                            <div className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm ${item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-500'}`}><IconComp size={18}/></div>
-                                                            <div className="flex-col justify-center flex-1 min-w-0">
-                                                                <div className="font-black text-gray-800 text-base truncate leading-tight">{item.itemName || cat?.name || '其他'}</div>
-                                                                <div className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
-                                                                    {item.itemName && <span className="bg-gray-100 text-gray-500 px-1 rounded font-bold shrink-0">{cat?.name || '其他'}</span>}
-                                                                    <span className="truncate">{item.note || '無備註'}</span>
-                                                                </div>
-                                                            </div>
-                                                         </div>
-                                                     </div>
-                                                     <div className="flex items-center gap-4 shrink-0 pl-2 h-full">
-                                                        <div className="text-right">
-                                                            <div className={`font-black text-lg ${item.type === 'income' ? 'text-emerald-500' : 'text-gray-800'}`}>{item.type==='income'?'+':'-'}{formatMoney(item.amount)}</div>
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 border-l border-gray-100 pl-3 justify-center h-full">
-                                                            <button onClick={() => { setEditingExpense(item); setShowExpenseAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
-                                                            <button onClick={() => setExpenseToDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                                        </div>
-                                                     </div>
-                                                 </div>
-                                             )
-                                         })}
-                                     </div>
-                                 )}
-                             </>
-                         )}
-                         {showExpenseAdd && <AddExpenseModal onClose={() => setShowExpenseAdd(false)} onSave={handleExpenseSave} initialData={editingExpense} categories={categories} bookId={currentBookId} showToast={showToast} />}
-                         <ConfirmModal isOpen={!!expenseToDelete} title="刪除記帳紀錄" message="確定要刪除這筆花費紀錄嗎？此動作無法復原。" onConfirm={() => { handleExpenseDelete(expenseToDelete?.id); setExpenseToDelete(null); }} onCancel={() => setExpenseToDelete(null)} />
-                     </div>
-                 )}
-
+                 
                  {/* === CATEGORY MANAGER VIEW === */}
                  {currentView === 'categories' && (
                      <div id="categories-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-24">
