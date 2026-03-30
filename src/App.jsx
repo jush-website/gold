@@ -157,6 +157,35 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     );
 };
 
+// 新增：Android 安裝提示元件
+const AndroidInstallPrompt = ({ onClose }) => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-4 mx-auto">
+                <Download size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">安裝應用程式</h3>
+            <p className="text-center text-gray-500 mb-6 text-sm">點擊瀏覽器右上角的選單，選擇「加到主畫面」或「安裝應用程式」即可將本系統安裝至您的手機。</p>
+            <button onClick={onClose} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">我知道了</button>
+        </div>
+    </div>
+);
+
+// 新增：iOS 安裝提示元件
+const IOSInstallPrompt = ({ onClose }) => (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={onClose}>
+        <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl mb-8 relative animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white transform rotate-45"></div>
+            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-4 mx-auto">
+                <Share size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">安裝 iOS 應用程式</h3>
+            <p className="text-center text-gray-500 mb-6 text-sm">點擊下方工具列的「分享」按鈕，然後滑動選單選擇「加入主畫面」。</p>
+            <button onClick={onClose} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30">我知道了</button>
+        </div>
+    </div>
+);
+
 const AppLoading = () => (
   <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', color: 'white' }}>
     <div className="relative"><div className="w-16 h-16 border-4 border-yellow-500/30 border-t-yellow-500 rounded-full animate-spin"></div><div className="absolute inset-0 flex items-center justify-center"><Coins size={24} className="text-yellow-500" /></div></div>
@@ -774,7 +803,94 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
     );
 };
 
-// --- CATEGORY MANAGER ---
+const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, currentBookId, setCurrentBookId, showToast }) => {
+    const [isAdding, setIsAdding] = useState(false);
+    const [newBookName, setNewBookName] = useState('');
+    const [editingBook, setEditingBook] = useState(null); 
+    const [bookToDelete, setBookToDelete] = useState(null);
+    
+    if (!isOpen) return null;
+
+    const handleCreate = () => {
+        if(!newBookName.trim()) {
+            showToast("請輸入帳本名稱", "error");
+            return;
+        }
+        onSaveBook({ name: newBookName });
+        setNewBookName('');
+        setIsAdding(false);
+    };
+
+    const handleUpdate = () => {
+        if(!editingBook || !editingBook.name.trim()) return;
+        onSaveBook({ id: editingBook.id, name: editingBook.name });
+        setEditingBook(null);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.2s]" onClick={(e)=>{if(e.target===e.currentTarget) onClose()}}>
+            <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-[slideUp_0.2s_ease-out]">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Book size={24} className="text-blue-600"/> 帳本管理</h3>
+                    <button onClick={onClose} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><X size={20} className="text-gray-500"/></button>
+                </div>
+
+                <div className="space-y-3 mb-6 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
+                    {books.length === 0 && <div className="text-center py-6 text-gray-400 font-bold text-sm">目前無帳本</div>}
+                    {books.map(book => {
+                        const isCurrent = book.id === currentBookId;
+                        const isEditingThis = editingBook?.id === book.id;
+
+                        if (isEditingThis) {
+                            return (
+                                <div key={book.id} className="flex gap-2 animate-[fadeIn_0.2s]">
+                                    <input autoFocus value={editingBook.name} onChange={e=>setEditingBook({...editingBook, name: e.target.value})} className="flex-1 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"/>
+                                    <button onClick={handleUpdate} className="bg-blue-600 text-white px-4 rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors"><Check size={18}/></button>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={book.id} onClick={() => { setCurrentBookId(book.id); onClose(); }} className={`group flex justify-between items-center cursor-pointer p-4 rounded-2xl border-2 transition-all duration-200 ${isCurrent ? 'bg-blue-50/50 border-blue-400 shadow-sm' : 'bg-white border-gray-100 hover:border-blue-200 hover:bg-blue-50/30'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isCurrent ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 transition-colors'}`}>
+                                        <Wallet size={20}/>
+                                    </div>
+                                    <div>
+                                        <span className={`font-bold block ${isCurrent ? 'text-blue-800' : 'text-gray-700'}`}>{book.name}</span>
+                                        {isCurrent && <span className="text-[10px] text-blue-500 font-bold bg-blue-100 px-2 py-0.5 rounded-full">目前使用中</span>}
+                                    </div>
+                                </div>
+                                <div className="flex gap-1 transition-opacity">
+                                    <button onClick={(e)=>{e.stopPropagation(); setEditingBook(book);}} className="p-2 text-gray-400 hover:text-blue-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Edit2 size={16}/></button>
+                                    <button onClick={(e)=>{e.stopPropagation(); setBookToDelete(book);}} className="p-2 text-gray-400 hover:text-red-600 bg-white rounded-lg shadow-sm hover:shadow transition-all"><Trash2 size={16}/></button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {isAdding ? (
+                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-[fadeIn_0.2s]">
+                        <label className="text-xs font-bold text-gray-500">建立新帳本</label>
+                        <input autoFocus value={newBookName} onChange={e=>setNewBookName(e.target.value)} placeholder="輸入帳本名稱..." className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"/>
+                        <div className="flex gap-2">
+                            <button onClick={()=>setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-200 rounded-xl hover:bg-gray-300 transition-colors">取消</button>
+                            <button onClick={handleCreate} disabled={!newBookName.trim()} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 transition-all">新增</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button onClick={() => setIsAdding(true)} className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-bold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center gap-2">
+                        <Plus size={20}/> 建立新帳本
+                    </button>
+                )}
+            </div>
+            
+            <ConfirmModal isOpen={!!bookToDelete} title="刪除帳本" message={`確定要刪除「${bookToDelete?.name}」嗎？裡面的所有記帳紀錄將會被一併刪除且無法復原。`} onConfirm={() => { onDeleteBook(bookToDelete.id); setBookToDelete(null); }} onCancel={() => setBookToDelete(null)} />
+        </div>
+    );
+};
+
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -841,6 +957,117 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
 
             {isModalOpen && <CategoryModal onClose={() => setIsModalOpen(false)} onSave={onSave} initialData={editingCat} defaultType={activeTab} showToast={showToast} />}
             <ConfirmModal isOpen={!!showDeleteConfirm} title="刪除分類" message={`確定要刪除「${showDeleteConfirm?.name}」分類嗎？`} onConfirm={() => { onDelete(showDeleteConfirm.id); setShowDeleteConfirm(null); }} onCancel={() => setShowDeleteConfirm(null)} />
+        </div>
+    );
+};
+
+const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, categories, allDebts, user, appId, db, showToast }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    
+    const handleExport = () => {
+        const data = { goldTransactions, books, debtBooks, allExpenses, categories, debts: allDebts };
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); 
+        a.href = url; 
+        a.download = `我的記帳本_備份_${new Date().toISOString().split('T')[0]}.json`; 
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("資料已成功匯出");
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) {
+            e.target.value = ''; 
+            return;
+        }
+        
+        setIsLoading(true);
+        const reader = new FileReader();
+        
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!data.books && !data.allExpenses && !data.goldTransactions && !data.debts && !data.debtBooks) {
+                    throw new Error("無效的備份檔案格式");
+                }
+
+                const importCollection = async (collectionName, items) => {
+                    if (!items || !Array.isArray(items)) return; 
+                    const promises = items.map(async (item) => {
+                        if (!item || !item.id) return; 
+                        const { id, ...payload } = item;
+                        try {
+                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, collectionName, String(id));
+                            await setDoc(docRef, payload);
+                        } catch (err) {
+                            console.warn(`寫入 ${collectionName} 的紀錄 ${id} 時發生錯誤:`, err);
+                        }
+                    });
+                    await Promise.all(promises);
+                };
+
+                await importCollection('gold_transactions', data.goldTransactions);
+                await importCollection('account_books', data.books);
+                await importCollection('debt_books', data.debtBooks);
+                await importCollection('expense_transactions', data.allExpenses);
+                await importCollection('expense_categories', data.categories);
+                await importCollection('debts', data.debts);
+
+                showToast("資料還原成功！正在重新載入...");
+                setTimeout(() => window.location.reload(), 1500); 
+
+            } catch (error) {
+                console.error("還原錯誤:", error);
+                showToast(`還原失敗: ${error.message}`, "error");
+            } finally {
+                setIsLoading(false);
+                e.target.value = ''; 
+            }
+        };
+        
+        reader.onerror = () => {
+            showToast("讀取檔案失敗，請檢查檔案是否損毀。", "error");
+            setIsLoading(false);
+            e.target.value = '';
+        };
+        
+        reader.readAsText(file);
+    };
+
+    return (
+        <div className="p-4 space-y-6 animate-[fadeIn_0.3s]">
+            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center mb-4">
+                    <Database size={24} />
+                </div>
+                <h2 className="text-xl font-black text-gray-800 mb-2">備份與還原</h2>
+                <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                    您可以將所有的記帳、黃金存摺、各類帳本、分類以及借款資料匯出為一個檔案保存在手機或電腦中，以便更換設備或需要時進行還原。
+                </p>
+
+                <div className="space-y-4">
+                    <button onClick={handleExport} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-md shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <DownloadCloud size={20} /> 匯出資料 (備份下載)
+                    </button>
+
+                    <div className="relative">
+                        <input 
+                            type="file" 
+                            accept=".json"
+                            onClick={(e) => { e.target.value = null; }} 
+                            onChange={handleImport}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            disabled={isLoading}
+                        />
+                        <button disabled={isLoading} className="w-full py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><UploadCloud size={20} /> 匯入資料 (選擇檔案還原)</>}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -1016,6 +1243,58 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
                 );
             })}
         </div>
+    );
+};
+
+const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
+    const [showSettings, setShowSettings] = useState(false);
+
+    return (
+        <>
+            {isOpen && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={onClose} />}
+            <div className={`fixed top-0 left-0 bottom-0 w-64 bg-gray-900 text-white z-[100] transform transition-transform duration-300 shadow-2xl flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="p-6 flex-1">
+                    {/* 優化：將設定齒輪與使用者資訊放一起，並加入下拉選單 */}
+                    <div className="flex items-center justify-between mb-10 mt-4 relative">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-xl border border-white/10">{user?.displayName?.[0] || 'U'}</div>
+                            <div>
+                                <div className="font-bold text-sm tracking-wide max-w-[100px] truncate">{user?.displayName}</div>
+                                <div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-xl transition-colors ${showSettings ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+                            <Settings size={20}/>
+                        </button>
+
+                        {showSettings && (
+                            <div className="absolute right-0 top-14 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeIn_0.2s]">
+                                <button onClick={() => { navigateTo('categories'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3">
+                                    <Tag size={16}/> 分類管理
+                                </button>
+                                <button onClick={() => { navigateTo('backup'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 border-t border-gray-700">
+                                    <Database size={16}/> 備份與還原
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* 優化：將功能選單重新群組排列 */}
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
+                    <div className="space-y-2 mb-8">
+                        <button onClick={() => { navigateTo('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
+                        <button onClick={() => { navigateTo('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
+                        <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
+                        <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
+                        <button onClick={() => { navigateTo('debt'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'debt' ? 'bg-rose-500/20 text-rose-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Landmark size={20} /> <span className="font-bold">借貸還款</span></button>
+                        <button onClick={() => { navigateTo('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
+                    </div>
+                </div>
+                <div className="p-6 border-t border-white/5">
+                     <button onClick={onLogout} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors"><LogOut size={18}/> 安全登出</button>
+                </div>
+            </div>
+        </>
     );
 };
 
@@ -1707,7 +1986,7 @@ export default function App() {
 
                 <div className="w-[80px] flex justify-end gap-2 items-center shrink-0">
                     {currentView === 'home' && (
-                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-scale-95 transition-transform" title="收支日曆">
+                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-95 transition-transform" title="收支日曆">
                             <Calendar size={18}/>
                         </button>
                     )}
@@ -1723,6 +2002,9 @@ export default function App() {
                     )}
                 </div>
              </div>
+
+             {showAndroidPrompt && <AndroidInstallPrompt onClose={() => setShowAndroidPrompt(false)} />}
+             {showIOSPrompt && <IOSInstallPrompt onClose={() => setShowIOSPrompt(false)} />}
 
              {/* MAIN CONTENT AREA */}
              <div className="flex-1 overflow-hidden relative">
