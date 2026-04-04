@@ -1217,63 +1217,11 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
     );
 };
 
-const Sidebar = ({ isOpen, onClose, currentView, navigateTo, user, onLogout }) => {
-    const [showSettings, setShowSettings] = useState(false);
-
-    return (
-        <>
-            {isOpen && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={onClose} />}
-            <div className={`fixed top-0 left-0 bottom-0 w-64 bg-gray-900 text-white z-[100] transform transition-transform duration-300 shadow-2xl flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                <div className="p-6 flex-1">
-                    {/* 優化：將設定齒輪與使用者資訊放一起，並加入下拉選單 */}
-                    <div className="flex items-center justify-between mb-10 mt-4 relative">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 text-xl border border-white/10">{user?.displayName?.[0] || 'U'}</div>
-                            <div>
-                                <div className="font-bold text-sm tracking-wide max-w-[100px] truncate">{user?.displayName}</div>
-                                <div className="text-[10px] text-gray-400 flex items-center gap-1"><ShieldCheck size={10}/> 已驗證帳號</div>
-                            </div>
-                        </div>
-                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-xl transition-colors ${showSettings ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-                            <Settings size={20}/>
-                        </button>
-
-                        {showSettings && (
-                            <div className="absolute right-0 top-14 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-[fadeIn_0.2s]">
-                                <button onClick={() => { navigateTo('categories'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3">
-                                    <Tag size={16}/> 分類管理
-                                </button>
-                                <button onClick={() => { navigateTo('backup'); onClose(); setShowSettings(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 border-t border-gray-700">
-                                    <Database size={16}/> 備份與還原
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* 優化：將功能選單重新群組排列 */}
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-2">主要功能</div>
-                    <div className="space-y-2 mb-8">
-                        <button onClick={() => { navigateTo('home'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'home' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><LayoutGrid size={20} /> <span className="font-bold">首頁總覽</span></button>
-                        <button onClick={() => { navigateTo('expense'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'expense' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><CreditCard size={20} /> <span className="font-bold">生活記帳</span></button>
-                        <button onClick={() => { navigateTo('history'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'history' ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><History size={20} /> <span className="font-bold">歷史紀錄</span></button>
-                        <button onClick={() => { navigateTo('calendar'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'calendar' ? 'bg-orange-500/20 text-orange-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Calendar size={20} /> <span className="font-bold">收支日曆</span></button>
-                        <button onClick={() => { navigateTo('debt'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'debt' ? 'bg-rose-500/20 text-rose-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Landmark size={20} /> <span className="font-bold">借貸還款</span></button>
-                        <button onClick={() => { navigateTo('gold'); onClose(); }} className={`w-full text-left p-3.5 rounded-2xl flex items-center gap-4 transition-all duration-200 ${currentView === 'gold' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}><Coins size={20} /> <span className="font-bold">黃金存摺</span></button>
-                    </div>
-                </div>
-                <div className="p-6 border-t border-white/5">
-                     <button onClick={onLogout} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 font-bold text-sm transition-colors"><LogOut size={18}/> 安全登出</button>
-                </div>
-            </div>
-        </>
-    );
-};
-
 // --- MAIN APPLICATION SHELL ---
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [showSettingsMenu, setShowSettingsMenu] = useState(false);
     
     // 全域 Toast 狀態
     const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -1356,7 +1304,17 @@ export default function App() {
     const [showRepaymentAdd, setShowRepaymentAdd] = useState(false);
     const [showDebtDetails, setShowDebtDetails] = useState(false);
     const [activeDebt, setActiveDebt] = useState(null);
-    const [debtTab, setDebtTab] = useState('active'); // 新增：用於控制「未結清/已結清」頁籤
+    const [debtTab, setDebtTab] = useState('active');
+
+    // Bottom Navigation Setup
+    const bottomNavItems = [
+        { id: 'home', icon: LayoutGrid, label: '首頁', activeColor: 'text-gray-800' },
+        { id: 'expense', icon: CreditCard, label: '記帳', activeColor: 'text-blue-600' },
+        { id: 'history', icon: History, label: '歷史', activeColor: 'text-purple-600' },
+        { id: 'calendar', icon: Calendar, label: '日曆', activeColor: 'text-orange-500' },
+        { id: 'debt', icon: Landmark, label: '借貸', activeColor: 'text-rose-600' },
+        { id: 'gold', icon: Coins, label: '黃金', activeColor: 'text-yellow-500' }
+    ];
 
     useEffect(() => {
         if (!document.getElementById('tailwind-script')) {
@@ -1847,7 +1805,7 @@ export default function App() {
 
     const dailyExpenses = useMemo(() => {
         const groups = {};
-        const currentRealMonth = getLocalYMD().substring(0, 7); // 格式如 "2026-03"
+        const currentRealMonth = getLocalYMD().substring(0, 7);
 
         expenses.forEach(e => {
             const safeDate = e.date || getLocalYMD();
@@ -1880,7 +1838,6 @@ export default function App() {
             const safeDate = e.date || getLocalYMD();
             return safeDate.startsWith(historyCurrentMonthKey);
         }).sort((a,b) => {
-            // 優化：使用 localeCompare 安全比對日期字串
             const dateDiff = String(b.date || '').localeCompare(String(a.date || ''));
             if (dateDiff !== 0) return dateDiff;
             return getSortTime(b.createdAt) - getSortTime(a.createdAt);
@@ -1952,14 +1909,34 @@ export default function App() {
              `}</style>
              
              <Toast message={toast.message} type={toast.type} />
-             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} navigateTo={navigateTo} user={user} onLogout={() => signOut(auth)} />
 
              {/* TOP NAVIGATION BAR */}
              <div className="bg-white shrink-0 z-40 px-4 py-3 flex justify-between items-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border-b border-gray-100">
-                <div className="w-[80px] flex items-center shrink-0">
-                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors">
-                        <Menu size={24} className="text-gray-700"/>
+                <div className="w-[80px] flex items-center shrink-0 relative">
+                    <button onClick={() => setShowSettingsMenu(!showSettingsMenu)} className="p-2 -ml-2 rounded-full hover:bg-gray-50 transition-colors text-gray-700">
+                        <Settings size={24}/>
                     </button>
+                    {/* 左上角齒輪下拉選單 */}
+                    {showSettingsMenu && (
+                        <>
+                            <div className="fixed inset-0 z-[90]" onClick={() => setShowSettingsMenu(false)}></div>
+                            <div className="absolute left-0 top-12 w-48 bg-white border border-gray-100 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[100] overflow-hidden animate-[fadeIn_0.2s]">
+                                <div className="p-3 border-b border-gray-50 flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-md text-xs">{user?.displayName?.[0] || 'U'}</div>
+                                    <div className="font-bold text-sm text-gray-800 truncate">{user?.displayName}</div>
+                                </div>
+                                <button onClick={() => { navigateTo('categories'); setShowSettingsMenu(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 font-bold transition-colors">
+                                    <Tag size={18}/> 分類管理
+                                </button>
+                                <button onClick={() => { navigateTo('backup'); setShowSettingsMenu(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-3 border-t border-gray-50 font-bold transition-colors">
+                                    <Database size={18}/> 備份與還原
+                                </button>
+                                <button onClick={() => signOut(auth)} className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 flex items-center gap-3 border-t border-gray-50 font-bold transition-colors">
+                                    <LogOut size={18}/> 安全登出
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
                 
                 <div className="font-black text-lg text-gray-800 flex justify-center items-center gap-2 flex-1">
@@ -1980,11 +1957,6 @@ export default function App() {
                 </div>
 
                 <div className="w-[80px] flex justify-end gap-2 items-center shrink-0">
-                    {currentView === 'home' && (
-                        <button onClick={() => navigateTo('calendar')} className="flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-100 w-9 h-9 rounded-full shadow-sm border border-orange-100 active:scale-95 transition-transform" title="收支日曆">
-                            <Calendar size={18}/>
-                        </button>
-                    )}
                     {showInstallBtn && (
                         <button onClick={handleInstallClick} className="flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 w-9 h-9 rounded-full shadow-sm border border-blue-100 active:scale-95 transition-transform" title="下載 APP">
                             <Download size={18}/>
@@ -2005,7 +1977,7 @@ export default function App() {
              <div className="flex-1 overflow-hidden relative">
                  {/* === HOME DASHBOARD VIEW === */}
                  {currentView === 'home' && (
-                     <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 animate-[fadeIn_0.3s] pb-24">
+                     <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 animate-[fadeIn_0.3s] pb-10">
                          <div onClick={() => navigateTo('expense')} className="bg-gradient-to-b from-white to-gray-50/50 rounded-[2rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.1)] border border-gray-200/80 cursor-pointer transform active:scale-[0.98] transition-all relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6 relative z-10">
                                 <div className="flex items-center gap-2">
@@ -2085,14 +2057,10 @@ export default function App() {
                                     setEditingExpense(null); 
                                     setShowExpenseAdd(true); 
                                 }} className="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"><Plus size={18}/> 記一筆</button>
-                                {/* 優化：分類管理獨立 Icon 放於記一筆按鈕右側 */}
-                                <button onClick={() => navigateTo('categories')} className="px-5 bg-white text-gray-600 border border-gray-200 rounded-2xl font-bold flex items-center justify-center shadow-sm hover:bg-gray-50 active:scale-95 transition-transform" title="分類管理">
-                                    <Tag size={20} />
-                                </button>
                             </div>
                         </div>
                         
-                        <div id="expense-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-5">
+                        <div id="expense-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-10 space-y-5">
                             {dailyExpenses.length === 0 ? <div className="text-center py-10 flex flex-col items-center"><div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Coffee size={30} className="text-gray-300"/></div><div className="text-gray-400 font-bold">這個月還沒有記帳喔</div></div> : dailyExpenses.map((group, idx) => (
                                 <div key={idx} className="animate-[fadeIn_0.3s]">
                                     <div className="flex justify-between items-end px-2 mb-3">
@@ -2154,7 +2122,7 @@ export default function App() {
                             </div>
                         </div>
                         
-                        <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-24 space-y-4 pt-1">
+                        <div id="debt-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-10 space-y-4 pt-1">
                             {displayDebts.length === 0 ? (
                                 <div className="text-center py-10 flex flex-col items-center">
                                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Landmark size={30} className="text-gray-300"/></div>
@@ -2210,7 +2178,7 @@ export default function App() {
                  {currentView === 'calendar' && (
                      <div 
                          id="calendar-scroll-container"
-                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
+                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-10 animate-[fadeIn_0.3s]"
                          onTouchStart={handleTouchStart}
                          onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
                      >
@@ -2287,7 +2255,7 @@ export default function App() {
 
                  {/* === GOLD VIEW === */}
                  {currentView === 'gold' && (
-                    <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-4 pb-24 animate-[fadeIn_0.3s]">
+                    <div className="h-full overflow-y-auto hide-scrollbar p-4 space-y-4 pb-10 animate-[fadeIn_0.3s]">
                         <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                              <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
@@ -2339,7 +2307,7 @@ export default function App() {
                  {currentView === 'history' && (
                      <div 
                          id="history-scroll-container"
-                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-24 animate-[fadeIn_0.3s]"
+                         className="h-full overflow-y-auto hide-scrollbar p-4 space-y-5 pb-10 animate-[fadeIn_0.3s]"
                          onTouchStart={handleTouchStart}
                          onTouchEnd={(e) => handleTouchEnd(e, (dir) => setCurrentHistoryDate(prev => new Date(prev.getFullYear(), prev.getMonth() + dir, 1)))}
                      >
@@ -2467,14 +2435,14 @@ export default function App() {
 
                  {/* === CATEGORY MANAGER VIEW === */}
                  {currentView === 'categories' && (
-                     <div id="categories-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-24">
+                     <div id="categories-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-10">
                          <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
                      </div>
                  )}
 
                  {/* === BACKUP & RESTORE VIEW === */}
                  {currentView === 'backup' && (
-                     <div id="backup-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-24">
+                     <div id="backup-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-10">
                          <BackupRestoreView 
                              goldTransactions={goldTransactions} 
                              books={books} 
@@ -2489,6 +2457,21 @@ export default function App() {
                          />
                      </div>
                  )}
+             </div>
+
+             {/* === BOTTOM NAVIGATION BAR === */}
+             <div className="bg-white border-t border-gray-100 flex items-center justify-between px-2 pb-[env(safe-area-inset-bottom)] pt-1 shrink-0 z-40">
+                {bottomNavItems.map(item => {
+                    const isActive = currentView === item.id;
+                    const Icon = item.icon;
+                    return (
+                        <button key={item.id} onClick={() => navigateTo(item.id)} className={`flex-1 flex flex-col items-center justify-center py-2 relative transition-colors ${isActive ? item.activeColor : 'text-gray-400 hover:text-gray-600'}`}>
+                            {isActive && <span className={`absolute top-0 w-8 h-1 rounded-b-full ${item.activeColor.replace('text-', 'bg-')}`}></span>}
+                            <Icon size={24} className={`mb-1 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                            <span className="text-[9px] font-bold">{item.label}</span>
+                        </button>
+                    );
+                })}
              </div>
         </div>
     );
