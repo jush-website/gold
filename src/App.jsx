@@ -933,21 +933,23 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
     };
 
     return (
-        <div className="p-4 space-y-4 animate-[fadeIn_0.3s]">
-            <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100">
+        <div className="p-4 h-full flex flex-col animate-[fadeIn_0.3s] pb-6">
+            {/* 上方頁籤：固定高度 */}
+            <div className="flex bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 shrink-0 mb-4">
                 <button onClick={() => setActiveTab('expense')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'expense' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>支出分類</button>
                 <button onClick={() => setActiveTab('income')} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'income' ? 'bg-purple-50 text-purple-600 shadow-sm border border-purple-100' : 'text-gray-400 hover:bg-gray-50'}`}>收入分類</button>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex flex-col">
-                <div className="flex justify-between items-center mb-4">
+            {/* 中間方塊列表區：填滿剩餘高度，內部滑動 */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-0 mb-4">
+                <div className="flex justify-between items-center mb-4 shrink-0">
                     <h4 className="font-bold text-gray-800 text-base flex items-center gap-2">
                         <LayoutGrid size={18} className="text-purple-500"/>
                         現有{activeTab === 'expense' ? '支出' : '收入'}分類
                     </h4>
                 </div>
 
-                <div className="max-h-[55vh] overflow-y-auto hide-scrollbar pr-1 pb-2">
+                <div className="flex-1 overflow-y-auto hide-scrollbar pr-1 pb-2">
                     {filteredCategories.length === 0 ? (
                         <div className="text-center py-10 text-gray-400 font-bold text-sm bg-gray-50 rounded-2xl border border-dashed border-gray-200">目前尚無分類</div>
                     ) : (
@@ -973,7 +975,8 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
                 </div>
             </div>
 
-            <button onClick={handleAddNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-200 active:scale-95 transition-transform">
+            {/* 最下方按鈕：固定在畫面底部 */}
+            <button onClick={handleAddNew} className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-200 active:scale-95 transition-transform shrink-0">
                 <Plus size={20}/> 新增{activeTab === 'expense' ? '支出' : '收入'}分類
             </button>
 
@@ -2486,7 +2489,7 @@ export default function App() {
 
                  {/* === CATEGORY MANAGER VIEW === */}
                  {currentView === 'categories' && (
-                     <div id="categories-scroll-container" className="h-full overflow-y-auto hide-scrollbar pb-10">
+                     <div id="categories-scroll-container" className="h-full">
                          <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
                      </div>
                  )}
