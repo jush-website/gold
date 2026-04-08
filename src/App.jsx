@@ -862,6 +862,58 @@ const BookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, current
     );
 };
 
+const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast }) => {
+    const [name, setName] = useState(initialData?.name || '');
+    const [icon, setIcon] = useState(initialData?.icon || 'tag');
+    const [type, setType] = useState(initialData?.type || defaultType || 'expense');
+
+    const iconsList = Object.keys(ICON_MAP);
+
+    const handleSubmit = () => {
+        if (!name.trim()) return showToast("請輸入分類名稱", "error");
+        onSave({ id: initialData?.id, name: name.trim(), icon, type });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/60 backdrop-blur-sm sm:p-4 animate-[fadeIn_0.2s]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+             <div className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
+                    <h2 className="text-lg font-bold text-gray-800">{initialData ? '編輯分類' : '新增分類'}</h2>
+                    <button onClick={onClose} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100"><X size={20}/></button>
+                </div>
+                <div className="p-5 space-y-5 overflow-y-auto pb-8 hide-scrollbar">
+                    <div className="flex bg-gray-100 rounded-xl p-1">
+                        <button onClick={()=>setType('expense')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type==='expense'?'bg-white text-red-500 shadow-sm':'text-gray-400'}`}>支出</button>
+                        <button onClick={()=>setType('income')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type==='income'?'bg-white text-green-500 shadow-sm':'text-gray-400'}`}>收入</button>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">分類名稱</label>
+                        <input autoFocus type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例如：早餐、交通..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-purple-400 transition-colors"/>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">選擇圖示</label>
+                        <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 hide-scrollbar">
+                            {iconsList.map(iconKey => {
+                                const IconComp = ICON_MAP[iconKey];
+                                const isSelected = icon === iconKey;
+                                return (
+                                    <button key={iconKey} onClick={() => setIcon(iconKey)} className={`aspect-square rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-purple-100 text-purple-600 border-2 border-purple-400 scale-105 shadow-sm' : 'bg-white text-gray-400 border border-gray-100 hover:bg-gray-50 shadow-sm'}`}>
+                                        <IconComp size={24}/>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                    <div className="pt-2">
+                        <button onClick={handleSubmit} className="w-full py-3.5 bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-purple-200 active:scale-95 transition-transform text-base">{initialData ? '儲存修改' : '確認新增'}</button>
+                    </div>
+                </div>
+             </div>
+        </div>
+    );
+};
+
 const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -899,21 +951,20 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
                     {filteredCategories.length === 0 ? (
                         <div className="text-center py-10 text-gray-400 font-bold text-sm bg-gray-50 rounded-2xl border border-dashed border-gray-200">目前尚無分類</div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-3 content-start">
+                        <div className="grid grid-cols-4 gap-3 content-start">
                             {filteredCategories.map(cat => {
                                 const IconComp = ICON_MAP[cat.icon] || Tag;
                                 return (
-                                    <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-2xl hover:border-purple-200 hover:bg-purple-50/30 transition-colors group">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white shadow-sm transition-colors ${activeTab === 'expense' ? 'text-red-500 group-hover:text-red-600' : 'text-green-500 group-hover:text-green-600'}`}>
+                                    <div key={cat.id} className="relative group">
+                                        <button onClick={() => handleEdit(cat)} className="w-full flex flex-col items-center justify-center py-3 px-1 bg-gray-50 border border-gray-100 rounded-2xl hover:border-purple-200 hover:bg-purple-50/30 transition-all active:scale-95 shadow-sm">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm mb-1.5 ${activeTab === 'expense' ? 'text-red-500' : 'text-green-500'}`}>
                                                 <IconComp size={20}/>
                                             </div>
-                                            <span className="font-black text-base text-gray-700">{cat.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button onClick={() => handleEdit(cat)} className="p-2.5 text-gray-400 hover:text-blue-600 bg-white border border-gray-100 hover:border-blue-200 rounded-xl shadow-sm transition-all active:scale-95"><Edit2 size={16}/></button>
-                                            <button onClick={() => setShowDeleteConfirm(cat)} className="p-2.5 text-gray-400 hover:text-red-500 bg-white border border-gray-100 hover:border-red-200 rounded-xl shadow-sm transition-all active:scale-95"><Trash2 size={16}/></button>
-                                        </div>
+                                            <span className="font-bold text-[10px] text-gray-700 w-full truncate text-center px-1">{cat.name}</span>
+                                        </button>
+                                        <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(cat); }} className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-white text-red-500 border border-gray-200 rounded-full flex items-center justify-center shadow-md transition-all active:scale-95 hover:bg-red-50 hover:text-red-600">
+                                            <X size={12}/>
+                                        </button>
                                     </div>
                                 )
                             })}
