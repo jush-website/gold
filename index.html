@@ -11,7 +11,20 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- PWA -->
-    <meta name="theme-color" content="#f9fafb" />
+    <!-- 自架字型：拉丁字與數字用網頁字型，中文交給系統字型 -->
+    <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- 深色是預設值；使用者切換過的話由下面這段在繪製前套用，避免閃白 -->
+    <meta name="theme-color" content="#0c0d10" />
+    <script>
+      try {
+        if (localStorage.getItem('theme_v1') === 'light') {
+          document.documentElement.classList.add('theme-light');
+          document.querySelector('meta[name="theme-color"]').content = '#f7f5f0';
+        }
+      } catch (e) { /* 無痕模式讀不到 localStorage，維持深色預設 */ }
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

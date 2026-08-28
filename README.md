@@ -59,16 +59,41 @@ npm run check       # lint + test + build，送出前跑這個
 ## 專案結構
 
 ```
-lib/              純函式，不依賴 React / Firebase，因此能單獨測試
-  format.js         金額、重量、日期格式化
-  finance.js        借款結清、黃金持倉計算
-  gold-parsers.js   台銀牌價 HTML / CSV 解析、國際金價換算
+lib/               純函式，不依賴 React / Firebase，因此能單獨測試
+  format.js          金額、重量、日期格式化
+  finance.js         借款結清、黃金持倉計算
+  gold-parsers.js    台銀牌價 HTML / CSV 解析、國際金價換算
 src/
-  App.jsx           主要畫面與 Firestore 存取
-  ErrorBoundary.jsx render 例外時的退路，避免整頁白畫面
-api/gold.js       Vercel Serverless Function：取得金價
-tests/            vitest 測試
+  App.jsx            狀態、Firestore 存取與各頁面的組合
+  ErrorBoundary.jsx  render 例外時的退路，避免整頁白畫面
+  ui/                設計系統：primitives、AppShell、主題、圖示
+  views/             各分頁（首頁、記帳、黃金、借貸、歷史、日曆…）
+  modals/            所有彈出式表單與確認視窗
+  preview/           介面預覽用的假資料（不會進入正式建置）
+api/gold.js        Vercel Serverless Function：取得金價
+tests/             vitest 測試
 ```
+
+### 介面預覽
+
+App 內頁在 Google 登入之後，開發時要看設計不必真的登入：
+
+```bash
+npm run dev
+# 開啟 http://localhost:5173/preview.html
+# 指定分頁：/preview.html?view=gold
+```
+
+預覽用假資料渲染每一頁，只有 `index.html` 會被打包，`preview.html` 不會進入 `dist`。
+
+### 設計語彙
+
+深色為預設，淺色可在設定選單手動切換。所有顏色都走 `src/index.css` 裡的
+語意化 CSS 變數（`--c-surface`、`--c-gold`、`--c-gain`…），切換主題只是換掉
+變數值，因此程式碼裡不需要任何 `dark:` 變體。
+
+字型自架於 `public/fonts`（拉丁子集約 97KB）：數字與拉丁字用 Instrument Sans，
+大金額用襯線的 Fraunces，中文交給系統字型。
 
 測試只涵蓋 `lib/` 的純函式與 `/api/gold` 的行為 —— 這是最容易安靜壞掉的部分
 （台銀改版、時區、除以零、金價取不到時的退路）。UI 沒有寫測試是刻意的取捨。
