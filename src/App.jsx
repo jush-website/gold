@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, collection, addDoc, onSnapshot, 
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
   query, orderBy, setDoc
 } from 'firebase/firestore';
@@ -114,7 +115,11 @@ if (isConfigured) {
     try { 
         app = initializeApp(firebaseConfig); 
         auth = getAuth(app);
-        db = getFirestore(app);
+        // 離線持久化：資料存在 IndexedDB，沒網路時 App 仍可開啟與記帳，
+        // 恢復連線後 Firestore 會自動把待寫入的變更送出。
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        });
         googleProvider = new GoogleAuthProvider();
     } catch (e) {
         console.error("Firebase Init Error:", e);
@@ -1370,61 +1375,10 @@ export default function App() {
         { id: 'gold', icon: Coins, label: '黃金', activeColor: 'text-yellow-500' }
     ];
 
+    // --- PWA (Progressive Web App) 安裝偵測 ---
+    // manifest / meta / icon 皆已改為 index.html 的靜態宣告 +
+    // vite-plugin-pwa 產生的 service worker，這裡只負責偵測安裝狀態。
     useEffect(() => {
-        if (!document.getElementById('tailwind-script')) {
-            const script = document.createElement('script');
-            script.id = 'tailwind-script';
-            script.src = "https://cdn.tailwindcss.com";
-            script.async = true;
-            document.head.appendChild(script);
-        }
-    }, []);
-
-    // --- PWA (Progressive Web App) App 安裝設定與偵測 ---
-    useEffect(() => {
-        const metaTags = [
-            { name: 'theme-color', content: '#f9fafb' }, 
-            { name: 'apple-mobile-web-app-capable', content: 'yes' }, 
-            { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }, 
-            { name: 'apple-mobile-web-app-title', content: '我的記帳本' }, 
-            { name: 'mobile-web-app-capable', content: 'yes' } 
-        ];
-
-        metaTags.forEach(({ name, content }) => {
-            let meta = document.querySelector(`meta[name="${name}"]`);
-            if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = name;
-                document.head.appendChild(meta);
-            }
-            meta.content = content;
-        });
-
-        const absoluteIconUrl = window.location.origin + "/gold.png";
-
-        const manifest = {
-            name: "我的記帳本", short_name: "我的記帳本", description: "您的專屬黃金與記帳管理工具",
-            start_url: window.location.origin, display: "standalone", background_color: "#f9fafb", theme_color: "#f9fafb",
-            icons: [{
-                src: absoluteIconUrl,
-                sizes: "192x192 512x512", type: "image/png", purpose: "any maskable"
-            }]
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(manifestBlob);
-        
-        let link = document.querySelector('link[rel="manifest"]');
-        if (!link) { link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
-        link.href = manifestUrl;
-
-        let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-        if (!appleIcon) { 
-            appleIcon = document.createElement('link'); 
-            appleIcon.rel = 'apple-touch-icon'; 
-            appleIcon.href = absoluteIconUrl; 
-            document.head.appendChild(appleIcon); 
-        }
-
         const userAgent = window.navigator.userAgent.toLowerCase();
         const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
         const isAndroidDevice = /android/.test(userAgent);
@@ -1444,9 +1398,15 @@ export default function App() {
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+        const handleAppInstalled = () => {
+            setDeferredPrompt(null);
+            setShowInstallBtn(false);
+        };
+        window.addEventListener('appinstalled', handleAppInstalled);
+
         return () => {
-            URL.revokeObjectURL(manifestUrl);
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
         };
     }, []);
 
@@ -1956,12 +1916,6 @@ export default function App() {
 
     return (
         <div className="h-[100dvh] bg-gray-50 text-gray-800 font-sans flex flex-col overflow-hidden touch-pan-y">
-             <style>{`
-                 .hide-scrollbar::-webkit-scrollbar { display: none; } 
-                 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } } 
-                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-             `}</style>
-             
              <Toast message={toast.message} type={toast.type} />
 
              {/* TOP NAVIGATION BAR */}

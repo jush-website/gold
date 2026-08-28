@@ -165,15 +165,22 @@ export default async function handler(req, res) {
          }
     }
 
+    // Vercel Edge / CDN 快取：5 分鐘內的重複請求直接由 CDN 回應，
+    // 之後 30 分鐘內先回舊資料再背景更新（stale-while-revalidate），
+    // 避免每位使用者每次開 App 都去爬台銀網頁而變慢或被擋。
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
     res.status(200).json({
       success: true,
       currentPrice,
       history,
-      intraday
+      intraday,
+      updatedAt: new Date().toISOString()
     });
 
   } catch (error) {
     console.error('Gold API Error:', error);
+    // 失敗不快取，讓下一次請求重新嘗試
+    res.setHeader('Cache-Control', 'no-store');
     res.status(500).json({ 
       success: false, 
       error: error.message || "Unknown error",
