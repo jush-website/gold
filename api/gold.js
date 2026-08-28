@@ -11,6 +11,9 @@ export default async function handler(req, res) {
     let currentPrice = 0;
     let history = [];
     let intraday = []; 
+    // 價格來源：讓前端知道這個數字是台銀牌價、上一個交易日收盤，還是國際金價換算
+    let priceSource = null;
+    let historySource = null;
     
     // --- 階段一：嘗試從 HTML 網頁抓取「台銀即時金價」 ---
     try {
@@ -24,6 +27,7 @@ export default async function handler(req, res) {
                 if (prices && prices.length >= 2) {
                     const rawPrice = prices[1].replace(/<[^>]+>/g, '').replace(/,/g, '');
                     currentPrice = parseFloat(rawPrice);
+                    if (currentPrice) priceSource = 'bot';
                 }
             }
         }
@@ -57,6 +61,7 @@ export default async function handler(req, res) {
             }).filter(item => item !== null);
 
             if (parsedHistory.length > 0) {
+                historySource = 'bot-csv';
                 history = parsedHistory.reverse(); // 最舊的在前，最新的在後 (通常 CSV 下載是倒序，需確認)
                 // 台銀 CSV 通常是日期新的在上面，所以 parse 後 index 0 是最新的。
                 // 我們希望 history 是 [舊 -> 新] 供圖表使用，所以 reverse。
@@ -74,6 +79,7 @@ export default async function handler(req, res) {
     // --- 關鍵修正：如果 HTML 抓不到價格 (週末休市)，使用歷史紀錄的最後一筆 (週五收盤價) ---
     if (!currentPrice && history.length > 0) {
         currentPrice = history[history.length - 1].price;
+        priceSource = 'bot-close';
         console.log("Using history last price as current:", currentPrice);
     }
 
@@ -110,6 +116,7 @@ export default async function handler(req, res) {
                  } else if (!currentPrice && lastYahooPriceTwd) {
                      // 如果還是沒有 currentPrice，用 Yahoo 算出來的頂著用
                      currentPrice = Math.floor(lastYahooPriceTwd * scaler);
+                     priceSource = 'yahoo';
                  }
 
                  intraday = timestamps.map((ts, i) => {
@@ -136,6 +143,8 @@ export default async function handler(req, res) {
                 const premium = 1.02;
                 
                 if (quotes.timestamp && quotes.indicators.quote[0].close) {
+                    // 注意：這裡的匯率是估計值，只用來畫走勢形狀，不是精確台幣牌價
+                    historySource = 'yahoo-estimated';
                     history = quotes.timestamp.map((ts, i) => {
                         const p = quotes.indicators.quote[0].close[i];
                         if (!p) return null;
@@ -153,15 +162,12 @@ export default async function handler(req, res) {
              console.error("History fallback failed", e);
          }
          
-         // 最後防線：如果還是沒有價格，且沒有歷史紀錄，才用 2880
-         // 但如果有歷史紀錄，就用歷史最後一筆
-         if (!currentPrice) {
-             if (history.length > 0) {
-                 currentPrice = history[history.length - 1].price;
-             } else {
-                 currentPrice = 2880;
-                 history = [{ date: new Date().toISOString().split('T')[0], price: currentPrice, label: 'Today' }];
-             }
+         // 最後防線：只接受真的抓到的資料。
+         // 以前這裡會回傳寫死的 2880，使用者看到的是一個「看起來正常但錯誤」的價格，
+         // 連帶讓總市值與損益全部算錯 —— 寧可回 null 讓前端顯示「無法取得」。
+         if (!currentPrice && history.length > 0) {
+             currentPrice = history[history.length - 1].price;
+             priceSource = historySource === 'yahoo-estimated' ? 'yahoo' : 'bot-close';
          }
     }
 
@@ -171,7 +177,9 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
     res.status(200).json({
       success: true,
-      currentPrice,
+      currentPrice: currentPrice || null,
+      priceSource,
+      historySource,
       history,
       intraday,
       updatedAt: new Date().toISOString()
@@ -184,7 +192,7 @@ export default async function handler(req, res) {
     res.status(500).json({ 
       success: false, 
       error: error.message || "Unknown error",
-      currentPrice: 2880, 
+      currentPrice: null, 
       history: [],
       intraday: []
     });

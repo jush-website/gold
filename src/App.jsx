@@ -4,7 +4,7 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, addDoc, onSnapshot, 
   deleteDoc, doc, updateDoc, serverTimestamp,
-  query, orderBy, setDoc
+  query, orderBy, setDoc, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 import { 
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
@@ -54,7 +54,9 @@ try {
         firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
         isEnvConfigured = true;
     }
-} catch (e) {}
+} catch (e) {
+    console.warn("讀取環境變數失敗，改用本機儲存的設定:", e?.message || e);
+}
 
 if (!isEnvConfigured) {
     try {
@@ -63,7 +65,9 @@ if (!isEnvConfigured) {
             const parsed = JSON.parse(saved);
             if (parsed.apiKey) firebaseConfig = parsed;
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn("本機儲存的 Firebase 設定無法解析:", e?.message || e);
+    }
 }
 
 // --- Helper Functions ---
@@ -71,6 +75,10 @@ const formatMoney = (amount, currency = 'TWD') => {
   const num = Number(amount) || 0;
   return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: currency, maximumFractionDigits: 0 }).format(num);
 };
+
+// 金額可能是 null（尚未取得金價），這時顯示破折號而不是 $0
+const formatMoneyOrDash = (amount, currency = 'TWD') =>
+    amount == null ? '—' : formatMoney(amount, currency);
 
 const formatWeight = (grams, unit = 'tw_qian') => { 
     const num = Number(grams) || 0;
@@ -127,7 +135,9 @@ if (isConfigured) {
     }
 }
 
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'gold-tracker-v1';
+// 舊版執行環境會注入 __app_id；一般部署沒有這個全域變數，就用固定值。
+// 注意：這個字串決定 Firestore 的資料路徑，改動會讀不到既有資料。
+const rawAppId = globalThis.__app_id ?? 'gold-tracker-v1';
 const appId = rawAppId.replace(/\//g, '_').replace(/\./g, '_');
 
 // --- SHARED UI COMPONENTS ---
@@ -472,7 +482,7 @@ const DebtBookManager = ({ isOpen, onClose, books, onSaveBook, onDeleteBook, cur
 };
 
 // --- GOLD COMPONENTS ---
-const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod }) => {
+const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibility, goldPrice, setPeriod, priceError, onRetry }) => {
     const containerRef = useRef(null);
     const [hoverData, setHoverData] = useState(null);
     const chartData = useMemo(() => {
@@ -506,8 +516,20 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 relative z-0 transition-all duration-300">
             <div className="p-5 flex justify-between items-start cursor-pointer hover:bg-gray-50/50 transition-colors" onClick={toggleVisibility}>
                 <div>
-                    <div className="flex items-center gap-2 mb-1.5"><span className="text-sm font-bold text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>賣出金價</span></div>
-                    <div className="text-3xl font-black text-gray-800 tracking-tight flex items-baseline gap-2">{formatMoney(goldPrice)} <span className="text-sm text-gray-400 font-normal">/克</span></div>
+                    <div className="flex items-center gap-2 mb-1.5"><span className="text-sm font-bold text-gray-400 flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${priceError ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`}></span>賣出金價</span></div>
+                    <div className="text-3xl font-black text-gray-800 tracking-tight flex items-baseline gap-2">{formatMoneyOrDash(goldPrice)} <span className="text-sm text-gray-400 font-normal">/克</span></div>
+                    {priceError && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-red-500">金價暫時無法取得</span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onRetry?.(); }}
+                                disabled={loading}
+                                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:text-gray-300"
+                            >
+                                {loading ? <Loader2 size={12} className="animate-spin"/> : <RefreshCw size={12}/>} 重試
+                            </button>
+                        </div>
+                    )}
                 </div>
                 {isVisible ? <ChevronUp size={20} className="text-gray-300"/> : <ChevronDown size={20} className="text-gray-300"/>}
             </div>
@@ -534,7 +556,8 @@ const GoldChart = ({ data, intraday, period, loading, isVisible, toggleVisibilit
 };
 
 const AddGoldModal = ({ onClose, onSave, initialData, showToast }) => {
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+    // 用當地時間，不能用 toISOString()（UTC）：台灣時間早上 8 點前會變成前一天
+    const [date, setDate] = useState(initialData?.date || getLocalYMD());
     const [unit, setUnit] = useState(initialData?.weight ? 'g' : 'g'); 
     const [weightInput, setWeightInput] = useState(initialData?.weight ? initialData.weight.toString() : '');
     const [totalCost, setTotalCost] = useState(initialData?.totalCost?.toString() ?? '');
@@ -585,7 +608,7 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
             case 'kg': return val * 1000; case 'twd': return val / (goldPrice || 1); default: return 0;
         }
     };
-    const displayValues = { twd: getGrams() * goldPrice, g: getGrams(), tw_qian: getGrams() / 3.75, tw_liang: getGrams() / 37.5 };
+    const displayValues = { twd: goldPrice == null ? null : getGrams() * goldPrice, g: getGrams(), tw_qian: getGrams() / 3.75, tw_liang: getGrams() / 37.5 };
     return (
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-4 transition-all duration-300">
             <button onClick={toggleVisibility} className="w-full p-4 flex items-center justify-between bg-gray-50/50 hover:bg-gray-100 transition-colors">
@@ -601,7 +624,7 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">價值 (TWD)</div><div className="font-black text-gray-800 text-lg">{formatMoney(displayValues.twd)}</div></div>
+                        <div className={`p-3 rounded-xl border ${unit === 'twd' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">價值 (TWD)</div><div className="font-black text-gray-800 text-lg">{formatMoneyOrDash(displayValues.twd)}</div></div>
                         <div className={`p-3 rounded-xl border ${unit === 'tw_liang' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">台兩</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 3 }).format(displayValues.tw_liang)} <span className="text-xs font-normal text-gray-400">兩</span></div></div>
                         <div className={`p-3 rounded-xl border ${unit === 'tw_qian' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">台錢</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.tw_qian)} <span className="text-xs font-normal text-gray-400">錢</span></div></div>
                         <div className={`p-3 rounded-xl border ${unit === 'g' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-100'}`}><div className="text-[10px] text-gray-400 mb-1">公克 (g)</div><div className="font-bold text-gray-800 text-lg">{new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 2 }).format(displayValues.g)} <span className="text-xs font-normal text-gray-400">克</span></div></div>
@@ -613,7 +636,7 @@ const GoldConverter = ({ goldPrice, isVisible, toggleVisibility }) => {
 };
 
 // --- EXPENSE COMPONENTS ---
-const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
+const CalculatorKeypad = ({ onResult, initialValue = '' }) => {
     const [expression, setExpression] = useState(initialValue ? initialValue.toString() : '');
     const [display, setDisplay] = useState(initialValue ? initialValue.toString() : '0');
     const [isNewInput, setIsNewInput] = useState(!!initialValue);
@@ -632,13 +655,16 @@ const CalculatorKeypad = ({ onResult, onClose, initialValue = '' }) => {
         } 
         else if (key === '=') {
             try {
-                // eslint-disable-next-line no-new-func
+                // 只保留數字與四則運算符號後才求值，避免任意程式碼被帶入
                 const result = new Function('return ' + expression.replace(/[^0-9+\-*/.]/g, ''))();
                 const final = Number(result).toFixed(0); 
                 setDisplay(final); 
                 setExpression(final); 
                 onResult(final);
-            } catch (e) { setDisplay('Error'); }
+            } catch (e) {
+                console.warn("計算式無法解析:", expression, e?.message || e);
+                setDisplay('Error');
+            }
         } else {
             const lastChar = expression.slice(-1);
             const isOperator = ['+','-','*','/'].includes(key);
@@ -697,12 +723,13 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
     
     const availableCats = categories.filter(c => c.type === type);
     const [category, setCategory] = useState(initialData?.category || (availableCats[0]?.id || ''));
-    
-    useEffect(() => {
-        if (!availableCats.find(c => c.id === category)) {
-            setCategory(availableCats[0]?.id || '');
-        }
-    }, [type, categories]);
+
+    // 切換收入／支出後，原本選的分類可能已不在清單裡。
+    // 這裡直接在 render 期推導出「實際生效的分類」，
+    // 不用 useEffect + setState，避免多一次連鎖重繪。
+    const effectiveCategory = availableCats.some(c => c.id === category)
+        ? category
+        : (availableCats[0]?.id || '');
 
     const [itemName, setItemName] = useState(initialData?.itemName || '');
     const [note, setNote] = useState(initialData?.note || '');
@@ -713,11 +740,11 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
             showToast("請輸入金額", "error");
             return;
         }
-        if (!category) {
+        if (!effectiveCategory) {
             showToast("請選擇分類", "error");
             return;
         }
-        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category, itemName, note, type, bookId });
+        onSave({ id: initialData?.id, amount: parseFloat(amount), date, category: effectiveCategory, itemName, note, type, bookId });
     };
 
     return (
@@ -747,7 +774,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                             {availableCats.map(c => {
                                 const Icon = ICON_MAP[c.icon] || Tag;
                                 return (
-                                    <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all ${category===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
+                                    <button key={c.id} onClick={()=>setCategory(c.id)} className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border-2 transition-all ${effectiveCategory===c.id ? (type==='expense'?'bg-red-50 border-red-200 text-red-600':'bg-green-50 border-green-200 text-green-600') : 'bg-white border-gray-100 text-gray-400 grayscale hover:grayscale-0 hover:bg-gray-50'}`}>
                                         <Icon size={20} className="mb-1"/>
                                         <span className="text-[10px] font-bold truncate w-full px-1 text-center">{c.name}</span>
                                     </button>
@@ -774,7 +801,7 @@ const AddExpenseModal = ({ onClose, onSave, initialData, categories, bookId, sho
                     )}
                 </div>
              </div>
-             {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} onClose={() => setShowKeypad(false)} /></div>)}
+             {showKeypad && (<div className="w-full sm:max-w-md absolute bottom-0 z-[70]"><CalculatorKeypad initialValue={amount} onResult={(val) => { setAmount(val); setShowKeypad(false); }} /></div>)}
         </div>
     );
 };
@@ -919,7 +946,7 @@ const CategoryModal = ({ onClose, onSave, initialData, defaultType, showToast })
     );
 };
 
-const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) => {
+const CategoryManager = ({ categories, onSave, onDelete, showToast }) => {
     const [activeTab, setActiveTab] = useState('expense');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCat, setEditingCat] = useState(null);
@@ -991,8 +1018,18 @@ const CategoryManager = ({ onClose, categories, onSave, onDelete, showToast }) =
     );
 };
 
+// 匯入檔的基本檢查：只接受「物件陣列，且每筆都有 id」，
+// 避免把壞掉或不相干的 JSON 直接 setDoc 寫進 Firestore。
+const isValidCollection = (items) =>
+    items === undefined || items === null ||
+    (Array.isArray(items) && items.every(
+        it => it && typeof it === 'object' && !Array.isArray(it) &&
+              (typeof it.id === 'string' || typeof it.id === 'number')
+    ));
+
 const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, categories, allDebts, user, appId, db, showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
+    const [pendingFile, setPendingFile] = useState(null);
     
     const handleExport = () => {
         const data = { goldTransactions, books, debtBooks, allExpenses, categories, debts: allDebts };
@@ -1000,28 +1037,43 @@ const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, ca
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); 
         a.href = url; 
-        a.download = `我的記帳本_備份_${new Date().toISOString().split('T')[0]}.json`; 
+        a.download = `我的記帳本_備份_${getLocalYMD()}.json`; 
         a.click();
         URL.revokeObjectURL(url);
         showToast("資料已成功匯出");
     };
 
-    const handleImport = async (e) => {
+    // 先讓使用者確認，確認後才真的讀檔寫入
+    const handleFileSelected = (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-        if (!window.confirm("還原將會覆寫/合併現有資料，建議先備份當前資料。確定要繼續嗎？")) {
-            e.target.value = ''; 
-            return;
-        }
-        
+        e.target.value = '';
+        if (file) setPendingFile(file);
+    };
+
+    const runImport = async (file) => {
+        setPendingFile(null);
         setIsLoading(true);
         const reader = new FileReader();
         
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target.result);
+                if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                    throw new Error("無效的備份檔案格式");
+                }
                 if (!data.books && !data.allExpenses && !data.goldTransactions && !data.debts && !data.debtBooks) {
                     throw new Error("無效的備份檔案格式");
+                }
+
+                const sections = {
+                    goldTransactions: '黃金紀錄', books: '記帳帳本', debtBooks: '借貸帳本',
+                    allExpenses: '收支紀錄', categories: '分類', debts: '借款',
+                };
+                const broken = Object.entries(sections)
+                    .filter(([key]) => !isValidCollection(data[key]))
+                    .map(([, label]) => label);
+                if (broken.length > 0) {
+                    throw new Error(`備份檔內容格式不正確：${broken.join('、')}`);
                 }
 
                 const importCollection = async (collectionName, items) => {
@@ -1054,14 +1106,12 @@ const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, ca
                 showToast(`還原失敗: ${error.message}`, "error");
             } finally {
                 setIsLoading(false);
-                e.target.value = ''; 
             }
         };
         
         reader.onerror = () => {
             showToast("讀取檔案失敗，請檢查檔案是否損毀。", "error");
             setIsLoading(false);
-            e.target.value = '';
         };
         
         reader.readAsText(file);
@@ -1088,7 +1138,7 @@ const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, ca
                             type="file" 
                             accept=".json"
                             onClick={(e) => { e.target.value = null; }} 
-                            onChange={handleImport}
+                            onChange={handleFileSelected}
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             disabled={isLoading}
                         />
@@ -1096,6 +1146,14 @@ const BackupRestoreView = ({ goldTransactions, books, debtBooks, allExpenses, ca
                             {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><UploadCloud size={20} /> 匯入資料 (選擇檔案還原)</>}
                         </button>
                     </div>
+
+                    <ConfirmModal
+                        isOpen={!!pendingFile}
+                        title="確定要還原資料嗎？"
+                        message={`即將從「${pendingFile?.name || ''}」還原，相同 ID 的紀錄會被覆寫。建議先匯出一份目前的資料備份。`}
+                        onConfirm={() => runImport(pendingFile)}
+                        onCancel={() => setPendingFile(null)}
+                    />
                 </div>
             </div>
         </div>
@@ -1113,7 +1171,14 @@ const SortableDayGroup = ({ list, categories, onSwap, setEditingExpense, setShow
     const draggingIdRef = useRef(null);
 
     useEffect(() => { draggingIdRef.current = draggingId; }, [draggingId]);
-    useEffect(() => { if (!draggingId) setCurrentList(list); }, [list, draggingId]);
+
+    // 外部清單更新時同步本地拖曳用的副本（拖曳進行中先不動，免得畫面跳動）。
+    // 用 React 官方的「render 期調整 state」寫法，比 useEffect + setState 少一次重繪。
+    const [syncedList, setSyncedList] = useState(list);
+    if (!draggingId && list !== syncedList) {
+        setSyncedList(list);
+        setCurrentList(list);
+    }
 
     useEffect(() => {
         const preventScroll = (e) => { if (draggingId) e.preventDefault(); };
@@ -1314,7 +1379,8 @@ export default function App() {
 
     // Gold Data
     const [goldTransactions, setGoldTransactions] = useState([]);
-    const [goldPrice, setGoldPrice] = useState(2880);
+    const [goldPrice, setGoldPrice] = useState(null); // null = 尚未取得，不可用假價格頂替
+    const [priceError, setPriceError] = useState(false);
     const [goldHistory, setGoldHistory] = useState([]);
     const [goldIntraday, setGoldIntraday] = useState([]);
     const [goldPeriod, setGoldPeriod] = useState('1d');
@@ -1501,7 +1567,7 @@ export default function App() {
             setAllExpenses(snap.docs.map(d => ({id:d.id, ...d.data()})));
         });
         return () => unsub();
-    }, [user, isConfigured]);
+    }, [user]);
 
     // 所有跟隨特定帳本的資料
     const expenses = useMemo(() => {
@@ -1536,11 +1602,12 @@ export default function App() {
 
     const fetchGoldPrice = async () => {
         setPriceLoading(true);
+        setPriceError(false);
         try {
-            const response = await fetch('/api/gold').catch(e => null);
+            const response = await fetch('/api/gold').catch(() => null);
             if (response && response.ok) {
                 const data = await response.json();
-                if (data.success) {
+                if (data.success && data.currentPrice) {
                     setGoldPrice(data.currentPrice); setGoldHistory(data.history || []); setGoldIntraday(data.intraday || []);
                     setPriceLoading(false); return;
                 }
@@ -1557,7 +1624,11 @@ export default function App() {
                 setGoldHistory(historyData); setGoldIntraday([]); 
             } else { throw new Error("Client fetch failed"); }
         } catch (e) { 
-            setGoldPrice(2950); setGoldHistory([{date:'2023-10-25', price:2900}, {date:'2023-10-26', price:2950}]); setGoldIntraday([]);
+            // 以前這裡會塞入 2950 與兩筆 2023 年的假歷史資料，
+            // 使用者看到的損益是錯的卻毫無提示。現在保留上一次成功取得的價格
+            // （沒有就顯示「—」），並在畫面上標示無法更新。
+            console.warn("金價取得失敗:", e?.message || e);
+            setPriceError(true);
         } finally { setPriceLoading(false); }
     };
 
@@ -1728,11 +1799,12 @@ export default function App() {
         const targetDebt = allDebts.find(d => d.id === debtId);
         if (!targetDebt) return;
         const newRepayment = { ...repaymentData, id: generateId(), createdAt: Date.now() };
-        const updatedRepayments = [...(targetDebt.repayments || []), newRepayment];
-        
+
         try {
+            // 用 arrayUnion 由伺服器端追加，不是「整包讀出來改完再寫回」。
+            // 兩台裝置同時記還款時才不會互相覆蓋；離線時也能排入佇列稍後同步。
             await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
-                repayments: updatedRepayments,
+                repayments: arrayUnion(newRepayment),
                 updatedAt: serverTimestamp()
             });
             showToast("已紀錄還款");
@@ -1743,11 +1815,13 @@ export default function App() {
     const handleRepaymentDelete = async (debtId, repaymentId) => {
         const targetDebt = allDebts.find(d => d.id === debtId);
         if (!targetDebt) return;
-        const updatedRepayments = (targetDebt.repayments || []).filter(r => r.id !== repaymentId);
-        
+        const target = (targetDebt.repayments || []).find(r => r.id === repaymentId);
+        if (!target) return showToast("找不到該筆還款明細", "error");
+
         try {
+            // 同樣交給伺服器端比對移除，避免覆蓋掉其他裝置剛新增的還款
             await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'debts', String(debtId)), {
-                repayments: updatedRepayments,
+                repayments: arrayRemove(target),
                 updatedAt: serverTimestamp()
             });
             showToast("已移除該筆還款明細");
@@ -1757,8 +1831,9 @@ export default function App() {
 
     const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
     const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
-    const goldCurrentVal = goldTotalWeight * goldPrice;
-    const goldProfit = goldCurrentVal - goldTotalCost;
+    const hasGoldPrice = goldPrice != null;
+    const goldCurrentVal = hasGoldPrice ? goldTotalWeight * goldPrice : null;
+    const goldProfit = hasGoldPrice ? goldCurrentVal - goldTotalCost : null;
     const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
 
     // 優化：使用 localeCompare 安全比對日期字串，避免舊資料 Date 解析錯誤導致崩潰
@@ -2036,10 +2111,10 @@ export default function App() {
                                 <span className="text-xs font-bold bg-black/20 px-3 py-1 rounded-full backdrop-blur-md">查看詳情 <ArrowRight size={12} className="inline ml-1 mb-0.5"/></span>
                             </div>
                             <div className="text-orange-50 text-xs font-bold mb-1 relative z-10">總市值 (TWD)</div>
-                            <div className="text-4xl font-black mb-6 tracking-tight relative z-10">{formatMoney(goldCurrentVal)}</div>
+                            <div className="text-4xl font-black mb-6 tracking-tight relative z-10">{formatMoneyOrDash(goldCurrentVal)}</div>
                             <div className="grid grid-cols-2 gap-4 relative z-10">
                                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">總重量</div><div className="font-bold text-lg flex items-end gap-1">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}<span className="text-xs mb-0.5 opacity-80">錢</span></div></div>
-                                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">未實現損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
+                                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10"><div className="text-[10px] text-orange-100 mb-1">未實現損益</div><div className="font-bold text-lg">{goldProfit != null && goldProfit >= 0 ? '+' : ''}{formatMoneyOrDash(goldProfit)}</div></div>
                             </div>
                          </div>
                      </div>
@@ -2267,10 +2342,10 @@ export default function App() {
                         <div className="bg-gradient-to-br from-amber-400 to-orange-600 rounded-[2rem] p-6 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden">
                              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
                              <div className="text-orange-100 text-xs font-bold mb-1">黃金總市值</div>
-                             <div className="text-4xl font-black mb-6 tracking-tight">{formatMoney(goldCurrentVal)}</div>
+                             <div className="text-4xl font-black mb-6 tracking-tight">{formatMoneyOrDash(goldCurrentVal)}</div>
                              <div className="grid grid-cols-2 gap-4">
                                  <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">持有 (錢)</div><div className="font-bold text-lg">{formatWeight(goldTotalWeight, 'tw_qian').replace('錢', '')}</div></div>
-                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit>=0?'+':''}{formatMoney(goldProfit)}</div></div>
+                                 <div className="bg-white/10 backdrop-blur rounded-xl p-3"><div className="text-xs text-orange-100 opacity-80">損益</div><div className="font-bold text-lg">{goldProfit != null && goldProfit >= 0 ? '+' : ''}{formatMoneyOrDash(goldProfit)}</div></div>
                              </div>
                              <div className="mt-4 pt-4 border-t border-white/20 flex justify-between items-center text-sm">
                                  <div className="flex flex-col"><span className="text-orange-100/80 text-[10px] font-bold">購入總成本</span><span className="font-black">{formatMoney(goldTotalCost)}</span></div>
@@ -2279,7 +2354,7 @@ export default function App() {
                         </div>
                         <button onClick={() => { setEditingGold(null); setShowGoldAdd(true); }} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 active:scale-95 transition-transform"><Plus size={20}/> 紀錄一筆黃金</button>
                         <GoldConverter goldPrice={goldPrice} isVisible={showConverter} toggleVisibility={() => setShowConverter(!showConverter)}/>
-                        <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
+                        <GoldChart data={goldHistory} intraday={goldIntraday} period={goldPeriod} setPeriod={setGoldPeriod} goldPrice={goldPrice} loading={priceLoading} priceError={priceError} onRetry={fetchGoldPrice} isVisible={showChart} toggleVisibility={()=>setShowChart(!showChart)}/>
                         <div className="space-y-3">
                             <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider ml-1">最近紀錄</h3>
                             {sortedGoldTransactions.length === 0 ? <div className="text-center text-gray-400 py-10">目前尚無黃金紀錄</div> : 
@@ -2294,8 +2369,11 @@ export default function App() {
                                      </div>
                                      <div className="flex items-center gap-3">
                                         <div className="text-right">
-                                            <div className="font-bold text-gray-800">{formatMoney(t.weight * goldPrice)}</div>
-                                            <div className={`text-[10px] font-bold mt-0.5 inline-block ${(t.weight*goldPrice - t.totalCost) >=0 ? 'text-green-500 bg-green-50 px-1.5 rounded':'text-red-500 bg-red-50 px-1.5 rounded'}`}>{(t.weight*goldPrice - t.totalCost) >=0 ? '賺 ':''}{formatMoney(t.weight*goldPrice - t.totalCost)}</div>
+                                            <div className="font-bold text-gray-800">{hasGoldPrice ? formatMoney(t.weight * goldPrice) : '—'}</div>
+                                            {hasGoldPrice && (() => {
+                                                const rowProfit = t.weight * goldPrice - t.totalCost;
+                                                return <div className={`text-[10px] font-bold mt-0.5 inline-block ${rowProfit >= 0 ? 'text-green-500 bg-green-50 px-1.5 rounded' : 'text-red-500 bg-red-50 px-1.5 rounded'}`}>{rowProfit >= 0 ? '賺 ' : ''}{formatMoney(rowProfit)}</div>;
+                                            })()}
                                         </div>
                                         <div className="flex flex-col gap-1 border-l border-gray-100 pl-3">
                                             <button onClick={() => { setEditingGold(t); setShowGoldAdd(true); }} className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"><Edit2 size={16}/></button>
@@ -2399,7 +2477,7 @@ export default function App() {
 
                                  {historyTab === 'list' && (
                                      <div className="space-y-3 animate-[fadeIn_0.3s]">
-                                         {currentHistoryRecords.map((item, i) => {
+                                         {currentHistoryRecords.map((item) => {
                                               const cat = categories.find(c=>c.id===item.category);
                                               const IconComp = ICON_MAP[cat?.icon] || Tag;
                                               return (
@@ -2444,7 +2522,7 @@ export default function App() {
                  {/* === CATEGORY MANAGER VIEW === */}
                  {currentView === 'categories' && (
                      <div id="categories-scroll-container" className="h-full">
-                         <CategoryManager onClose={goBack} categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
+                         <CategoryManager categories={categories} onSave={handleCategorySave} onDelete={handleCategoryDelete} showToast={showToast} />
                      </div>
                  )}
 
