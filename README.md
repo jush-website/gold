@@ -22,10 +22,15 @@ npm run dev
 其他指令：
 
 ```bash
-npm run build     # 建置到 dist/
-npm run preview   # 預覽建置結果（PWA 的 service worker 只在建置版本啟用）
-npm run lint      # ESLint
+npm run build       # 建置到 dist/
+npm run preview     # 預覽建置結果（PWA 的 service worker 只在建置版本啟用）
+npm run lint        # ESLint
+npm test            # 單元測試（vitest）
+npm run test:watch  # 測試 watch 模式
+npm run check       # lint + test + build，送出前跑這個
 ```
+
+每次 push 都會由 GitHub Actions 跑同一套 `check`（見 `.github/workflows/ci.yml`）。
 
 ## 環境變數
 
@@ -50,6 +55,26 @@ npm run lint      # ESLint
 
 部署前請在 Vercel 專案的 **Settings → Environment Variables** 設定
 `VITE_FIREBASE_API_KEY`（建置期需要）。
+
+## 專案結構
+
+```
+lib/              純函式，不依賴 React / Firebase，因此能單獨測試
+  format.js         金額、重量、日期格式化
+  finance.js        借款結清、黃金持倉計算
+  gold-parsers.js   台銀牌價 HTML / CSV 解析、國際金價換算
+src/
+  App.jsx           主要畫面與 Firestore 存取
+  ErrorBoundary.jsx render 例外時的退路，避免整頁白畫面
+api/gold.js       Vercel Serverless Function：取得金價
+tests/            vitest 測試
+```
+
+測試只涵蓋 `lib/` 的純函式與 `/api/gold` 的行為 —— 這是最容易安靜壞掉的部分
+（台銀改版、時區、除以零、金價取不到時的退路）。UI 沒有寫測試是刻意的取捨。
+
+日期一律使用 `getLocalYMD()` 取當地時間，**不要用 `toISOString()`**：
+那是 UTC，台灣時間早上 8 點前會得到前一天。
 
 ## 資料結構（Firestore）
 

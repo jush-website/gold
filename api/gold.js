@@ -1,4 +1,6 @@
 // 這是運行在 Vercel 伺服器端的程式碼 (Node.js)
+import { parseBotGramPrice, parseBotCsv, usdOunceToTwdGram, GRAMS_PER_TROY_OUNCE } from '../lib/gold-parsers.js';
+
 export default async function handler(req, res) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -20,15 +22,10 @@ export default async function handler(req, res) {
         const htmlResponse = await fetch('https://rate.bot.com.tw/gold?Lang=zh-TW', { headers });
         if (htmlResponse.ok) {
             const html = await htmlResponse.text();
-            const gramRowMatch = html.match(/1\s*公克.*?<\/tr>/s);
-            if (gramRowMatch) {
-                const rowHtml = gramRowMatch[0];
-                const prices = rowHtml.match(/>([0-9,]+)<\/td>/g);
-                if (prices && prices.length >= 2) {
-                    const rawPrice = prices[1].replace(/<[^>]+>/g, '').replace(/,/g, '');
-                    currentPrice = parseFloat(rawPrice);
-                    if (currentPrice) priceSource = 'bot';
-                }
+            const gramPrice = parseBotGramPrice(html);
+            if (gramPrice) {
+                currentPrice = gramPrice;
+                priceSource = 'bot';
             }
         }
     } catch (e) {
@@ -41,35 +38,12 @@ export default async function handler(req, res) {
         const csvResponse = await fetch('https://rate.bot.com.tw/gold/csv/0', { headers });
         if (csvResponse.ok) {
             const csvText = await csvResponse.text();
-            const rows = csvText.split('\n').filter(row => row.trim() !== '');
-            // CSV 格式：日期, 本行買入, 本行賣出...
-            const dataRows = rows.slice(1); 
-            const parsedHistory = dataRows.map(row => {
-                const columns = row.split(',');
-                if (columns.length < 4) return null;
-                const dateStr = columns[0].trim(); 
-                const price = parseFloat(columns[3]); // 賣出價
-                if (!dateStr || isNaN(price) || dateStr.length < 8) return null;
-                
-                // 格式化日期 YYYY-MM-DD
-                const formattedDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
-                return {
-                    date: formattedDate,
-                    price: price,
-                    label: `${dateStr.substring(4, 6)}/${dateStr.substring(6, 8)}`
-                };
-            }).filter(item => item !== null);
+            // parseBotCsv 已保證回傳「舊 -> 新」的順序供圖表使用
+            const parsedHistory = parseBotCsv(csvText);
 
             if (parsedHistory.length > 0) {
                 historySource = 'bot-csv';
-                history = parsedHistory.reverse(); // 最舊的在前，最新的在後 (通常 CSV 下載是倒序，需確認)
-                // 台銀 CSV 通常是日期新的在上面，所以 parse 後 index 0 是最新的。
-                // 我們希望 history 是 [舊 -> 新] 供圖表使用，所以 reverse。
-                // 但是！如果是直接從陣列 map 下來，順序通常是 [新 -> 舊]。
-                // 讓我們確保最後一筆是 "最新" 的日期。
-                if (new Date(history[0].date) > new Date(history[history.length-1].date)) {
-                    history.reverse();
-                }
+                history = parsedHistory;
             }
         }
     } catch (e) {
@@ -101,7 +75,7 @@ export default async function handler(req, res) {
             const timestamps = quote.timestamp;
             const prices = quote.indicators.quote[0].close;
             const twdRate = tData.chart.result[0].meta.regularMarketPrice;
-            const ozToGram = 31.1034768; 
+            const ozToGram = GRAMS_PER_TROY_OUNCE; 
             
             if (timestamps && prices) {
                  // 計算校正參數 (Scaler)
@@ -109,7 +83,7 @@ export default async function handler(req, res) {
                  
                  const validPrices = prices.filter(p => p);
                  const lastRawPrice = validPrices.length > 0 ? validPrices[validPrices.length-1] : 0;
-                 const lastYahooPriceTwd = (lastRawPrice * twdRate) / ozToGram;
+                 const lastYahooPriceTwd = usdOunceToTwdGram(lastRawPrice, twdRate);
                  
                  if (currentPrice && lastYahooPriceTwd) {
                      scaler = currentPrice / lastYahooPriceTwd;
@@ -174,7 +148,11 @@ export default async function handler(req, res) {
     // Vercel Edge / CDN 快取：5 分鐘內的重複請求直接由 CDN 回應，
     // 之後 30 分鐘內先回舊資料再背景更新（stale-while-revalidate），
     // 避免每位使用者每次開 App 都去爬台銀網頁而變慢或被擋。
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=1800');
+    // 但「抓不到價格」不可以被快取 —— 否則一次短暫失敗會讓所有人
+    // 在接下來 5 分鐘都看到「無法取得」。
+    res.setHeader('Cache-Control', currentPrice
+        ? 's-maxage=300, stale-while-revalidate=1800'
+        : 'no-store');
     res.status(200).json({
       success: true,
       currentPrice: currentPrice || null,

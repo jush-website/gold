@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  formatMoney, formatMoneyOrDash, formatWeight, formatDate, formatMonth,
+  getLocalYMD, getSortTime, generateId
+} from '../lib/format.js';
+import { splitDebtsBySettlement, summarizeDebts, summarizeGold } from '../lib/finance.js';
 import { initializeApp } from 'firebase/app';
 import { 
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -69,51 +74,6 @@ if (!isEnvConfigured) {
         console.warn("本機儲存的 Firebase 設定無法解析:", e?.message || e);
     }
 }
-
-// --- Helper Functions ---
-const formatMoney = (amount, currency = 'TWD') => {
-  const num = Number(amount) || 0;
-  return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: currency, maximumFractionDigits: 0 }).format(num);
-};
-
-// 金額可能是 null（尚未取得金價），這時顯示破折號而不是 $0
-const formatMoneyOrDash = (amount, currency = 'TWD') =>
-    amount == null ? '—' : formatMoney(amount, currency);
-
-const formatWeight = (grams, unit = 'tw_qian') => { 
-    const num = Number(grams) || 0;
-    if (unit === 'tw_qian') return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num / 3.75) + '錢';
-    if (unit === 'tw_liang') return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(num / 37.5) + '兩';
-    return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) + '克';
-};
-
-const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    const days = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-    return `${d.getMonth() + 1}/${d.getDate()} ${days[d.getDay()]}`;
-};
-
-const formatMonth = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    return `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
-};
-
-// 取得當地時間的 YYYY-MM-DD
-const getLocalYMD = (date = new Date()) => {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-
-// 安全獲取時間戳以供排序
-const getSortTime = (t) => {
-    if (!t) return Date.now(); 
-    if (typeof t.toMillis === 'function') return t.toMillis();
-    if (t.seconds) return t.seconds * 1000;
-    return Date.now();
-};
-
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
 // --- Firebase Init ---
 let app, auth, db, googleProvider;
@@ -1581,22 +1541,7 @@ export default function App() {
     }, [allDebts, currentDebtBookId]);
 
     // 計算借款的已還款與待還款狀態，並分成「未結清」與「已結清」兩組
-    const { activeDebtsList, settledDebtsList } = useMemo(() => {
-        const active = [];
-        const settled = [];
-        debts.forEach(debt => {
-            const repaid = (debt.repayments || []).reduce((sum, r) => sum + Number(r.amount), 0);
-            const remaining = debt.amount - repaid;
-            const enrichedDebt = { ...debt, repaid, remaining, isSettled: remaining <= 0 };
-            
-            if (enrichedDebt.isSettled) {
-                settled.push(enrichedDebt);
-            } else {
-                active.push(enrichedDebt);
-            }
-        });
-        return { activeDebtsList: active, settledDebtsList: settled };
-    }, [debts]);
+    const { activeDebtsList, settledDebtsList } = useMemo(() => splitDebtsBySettlement(debts), [debts]);
 
     const displayDebts = debtTab === 'active' ? activeDebtsList : settledDebtsList;
 
@@ -1829,12 +1774,14 @@ export default function App() {
     };
 
 
-    const goldTotalWeight = goldTransactions.reduce((acc, t) => acc + (Number(t.weight) || 0), 0);
-    const goldTotalCost = goldTransactions.reduce((acc, t) => acc + (Number(t.totalCost) || 0), 0);
     const hasGoldPrice = goldPrice != null;
-    const goldCurrentVal = hasGoldPrice ? goldTotalWeight * goldPrice : null;
-    const goldProfit = hasGoldPrice ? goldCurrentVal - goldTotalCost : null;
-    const goldAvgCost = goldTotalWeight > 0 ? goldTotalCost / goldTotalWeight : 0;
+    const {
+        totalWeight: goldTotalWeight,
+        totalCost: goldTotalCost,
+        avgCost: goldAvgCost,
+        currentValue: goldCurrentVal,
+        profit: goldProfit,
+    } = useMemo(() => summarizeGold(goldTransactions, goldPrice), [goldTransactions, goldPrice]);
 
     // 優化：使用 localeCompare 安全比對日期字串，避免舊資料 Date 解析錯誤導致崩潰
     const sortedGoldTransactions = useMemo(() => {
@@ -1910,16 +1857,7 @@ export default function App() {
         return Object.values(groups).sort((a,b) => String(b.date).localeCompare(String(a.date)));
     }, [expenses]);
 
-    const debtStats = useMemo(() => {
-        let totalBorrowed = 0;
-        let totalRepaid = 0;
-        debts.forEach(d => {
-            totalBorrowed += (Number(d.amount) || 0);
-            const repaid = (d.repayments || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-            totalRepaid += repaid;
-        });
-        return { totalBorrowed, totalRepaid, remaining: totalBorrowed - totalRepaid };
-    }, [debts]);
+    const debtStats = useMemo(() => summarizeDebts(debts), [debts]);
 
     const historyCurrentMonthKey = `${currentHistoryDate.getFullYear()}-${String(currentHistoryDate.getMonth() + 1).padStart(2, '0')}`;
     const currentHistoryRecords = useMemo(() => {

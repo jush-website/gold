@@ -6,6 +6,18 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
+  // 伺服器端與測試程式跑在 Node，不是瀏覽器
+  {
+    files: ['api/**/*.js', 'tests/**/*.js', 'lib/**/*.js', '*.config.js'],
+    languageOptions: {
+      globals: globals.node,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', ignoreRestSiblings: true }],
+    },
+  },
   {
     files: ['**/*.{js,jsx}'],
     extends: [
