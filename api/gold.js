@@ -7,6 +7,17 @@ import { parseBotGramPrice, parseBotCsv, usdOunceToTwdGram, GRAMS_PER_TROY_OUNCE
 const fetchWithTimeout = (url, options = {}, ms = 5000) =>
   fetch(url, { ...options, signal: AbortSignal.timeout(ms) });
 
+// 對方回 200 但內容不是預期資料時，要看得出那到底是什麼
+// —— 攔截頁、JS 驗證頁、還是版面改了。去掉標籤只留可讀文字。
+const bodySnippet = (text, max = 240) =>
+  String(text)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+
 export default async function handler(req, res) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -40,7 +51,7 @@ export default async function handler(req, res) {
                 currentPrice = gramPrice;
                 priceSource = 'bot';
             } else {
-                diagnostics.push(`bot-html: 取得網頁但解析不到 1 公克牌價（${html.length} bytes）`);
+                diagnostics.push(`bot-html: 取得網頁但解析不到 1 公克牌價（${html.length} bytes）｜內容：${bodySnippet(html)}`);
             }
         } else {
             diagnostics.push(`bot-html: HTTP ${htmlResponse.status}`);
@@ -63,7 +74,7 @@ export default async function handler(req, res) {
                 historySource = 'bot-csv';
                 history = parsedHistory;
             } else {
-                diagnostics.push(`bot-csv: 取得檔案但解析不到資料列（${csvText.length} bytes）`);
+                diagnostics.push(`bot-csv: 取得檔案但解析不到資料列（${csvText.length} bytes）｜內容：${bodySnippet(csvText)}`);
             }
         } else {
             diagnostics.push(`bot-csv: HTTP ${csvResponse.status}`);

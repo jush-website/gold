@@ -173,6 +173,20 @@ describe('/api/gold', () => {
     expect(debug.body.diagnostics.some((d) => d.startsWith('bot-csv:'))).toBe(true);
   });
 
+  // 台銀回 200 但內容是攔截頁時，光看長度分不出是被擋還是版面改了，
+  // 診斷要附上實際內容才有辦法判斷
+  it('對方回 200 但內容不對時，診斷要附上內容摘要', async () => {
+    global.fetch = stubFetch({
+      'rate.bot.com.tw': '<html><body><h1>存取被拒</h1><p>您的 IP 不在允許範圍</p></body></html>',
+    });
+    const res = mockRes();
+    await handler({ query: { debug: '1' } }, res);
+
+    const htmlDiag = res.body.diagnostics.find((d) => d.startsWith('bot-html:'));
+    expect(htmlDiag).toContain('存取被拒');
+    expect(htmlDiag).not.toContain('<h1>'); // 標籤要被去掉
+  });
+
   it('回應帶有 updatedAt 供前端顯示資料時間', async () => {
     global.fetch = stubFetch({ '/gold/csv/': botCsv });
     const res = mockRes();
