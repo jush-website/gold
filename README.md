@@ -48,8 +48,7 @@ npm run check       # lint + test + build，送出前跑這個
 ## 部署（Vercel）
 
 - 前端：Vite 靜態建置
-- `/api/gold`：Vercel Serverless Function，抓取台灣銀行黃金牌價（HTML + CSV），
-  並以 Yahoo Finance 的 `GC=F` / `TWD=X` 換算當日盤中走勢；多層備援，
+- `/api/gold`：Vercel Serverless Function，多層備援取得金價，
   回應帶 `s-maxage=300, stale-while-revalidate=1800` 由 CDN 快取
 - `vercel.json` 將 `/api/*` 之外的路徑改寫到 `index.html`（SPA 路由）
 
@@ -100,6 +99,32 @@ npm run dev
 
 日期一律使用 `getLocalYMD()` 取當地時間，**不要用 `toISOString()`**：
 那是 UTC，台灣時間早上 8 點前會得到前一天。
+
+## 金價從哪裡來
+
+實測台銀（rate.bot.com.tw）會擋掉 Vercel 的機房 IP：網頁與 CSV 都回 HTTP 200，
+但內容是一個 1.8KB 的攔截頁，兩個不同的網址回傳長度一模一樣。改到香港節點
+（`vercel.json` 的 `regions`）也一樣。
+
+所以實際運作時，價格來自 **Yahoo Finance 的 `GC=F`（COMEX 黃金期貨）
+搭配 `TWD=X` 即時匯率換算**，不是台銀牌價。程式沒有假裝它是：
+
+- 卡片標題依 `priceSource` 顯示「黃金參考價」或「台銀賣出金價」
+- 價格下方標示「國際金價換算」
+- 「今日」走勢標明是國際金價的形狀，台銀一天只調整幾次牌價
+
+### 校準
+
+國際金價換算值與台銀牌價之間有大致固定的價差（銀行的買賣價差）。
+黃金頁的「校準」讓使用者輸入一次台銀當下的「本行賣出／1 公克」，
+由程式推算倍率（`lib/calibration.js`），之後套用在現價、歷史與盤中走勢上。
+
+倍率存在 `localStorage`，不進 Firestore —— 它是顯示偏好而非帳務資料。
+代價是換裝置要重設一次。
+
+超出 0.8～1.25 的倍率會被拒絕，那多半是打錯字而不是校準。
+
+診斷用：`/api/gold?debug=1` 會附上各階段的失敗原因與當下匯率。
 
 ## 資料結構（Firestore）
 

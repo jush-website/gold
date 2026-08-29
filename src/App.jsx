@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
@@ -19,6 +19,8 @@ import {
 import { splitDebtsBySettlement, summarizeDebts, summarizeGold } from '../lib/finance.js';
 
 import { useTheme } from './ui/useTheme.js';
+import { useCalibration } from './ui/useCalibration.js';
+import { applyFactor, applyFactorToSeries } from '../lib/calibration.js';
 import { TopBar, SettingsMenu, BottomNav } from './ui/AppShell.jsx';
 import { Button, Field, inputClass } from './ui/primitives.jsx';
 
@@ -33,7 +35,7 @@ import BackupView from './views/BackupView.jsx';
 import LoginView, { AppLoading } from './views/LoginView.jsx';
 
 import {
-  Toast, ConfirmModal, InstallPrompt,
+  Toast, ConfirmModal, InstallPrompt, CalibrationModal,
   AddExpenseModal, AddGoldModal, AddDebtModal, AddRepaymentModal,
   DebtDetailsModal, BookManager,
 } from './modals/index.jsx';
@@ -157,6 +159,11 @@ const ConfigScreen = () => {
 
 export default function App() {
     const { isLight, toggleTheme } = useTheme();
+    const { calibration, saveCalibration, resetCalibration } = useCalibration();
+    // fetchGoldPrice 透過 ref 讀取最新的校準值，
+    // 這樣它本身就不必隨校準改變而重建，登入時掛上的監聽也不會被重複拆裝。
+    const calibrationRef = useRef(calibration);
+    useEffect(() => { calibrationRef.current = calibration; }, [calibration]);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -197,6 +204,7 @@ export default function App() {
     const [priceError, setPriceError] = useState(false);
     // 資料來源：讓畫面標示得出這是台銀牌價、上一交易日收盤，還是國際金價換算
     const [priceMeta, setPriceMeta] = useState({});
+    const [showCalibration, setShowCalibration] = useState(false);
     const [goldHistory, setGoldHistory] = useState([]);
     const [goldIntraday, setGoldIntraday] = useState([]);
     const [goldPeriod, setGoldPeriod] = useState('1d');
@@ -398,9 +406,10 @@ export default function App() {
             if (response && response.ok) {
                 const data = await response.json();
                 if (data.success && data.currentPrice) {
-                    setGoldPrice(data.currentPrice);
-                    setGoldHistory(data.history || []);
-                    setGoldIntraday(data.intraday || []);
+                    // 校準在這裡一次套用，後面的圖表與市值就不必各自處理
+                    setGoldPrice(applyFactor(data.currentPrice, calibrationRef.current.factor));
+                    setGoldHistory(applyFactorToSeries(data.history || [], calibrationRef.current.factor));
+                    setGoldIntraday(applyFactorToSeries(data.intraday || [], calibrationRef.current.factor));
                     setPriceMeta({
                         priceSource: data.priceSource,
                         historySource: data.historySource,
@@ -416,10 +425,10 @@ export default function App() {
                 const gQuote = yahooGold.chart.result[0], tQuote = yahooTwd.chart.result[0];
                 const twdRate = tQuote.meta.regularMarketPrice, currentGoldUsd = gQuote.meta.regularMarketPrice;
                 const priceTwd = Math.floor((currentGoldUsd * twdRate / 31.1035) * 1.005);
-                setGoldPrice(priceTwd);
+                setGoldPrice(applyFactor(priceTwd, calibrationRef.current.factor));
                 const timestamps = gQuote.timestamp, closePrices = gQuote.indicators.quote[0].close;
                 const historyData = timestamps.map((ts, i) => (!closePrices[i] ? null : { date: new Date(ts * 1000).toISOString().split('T')[0], price: Math.floor((closePrices[i] * twdRate / 31.1035) * 1.005) })).filter(x => x).slice(-30);
-                setGoldHistory(historyData);
+                setGoldHistory(applyFactorToSeries(historyData, calibrationRef.current.factor));
                 setGoldIntraday([]);
                 // 這條路徑完全靠 Yahoo 換算，不是台銀牌價
                 setPriceMeta({ priceSource: 'yahoo', historySource: 'yahoo-estimated', intradaySource: null });
@@ -977,7 +986,9 @@ export default function App() {
                         priceLoading={priceLoading}
                         priceError={priceError}
                         priceMeta={priceMeta}
+                        calibration={calibration}
                         onRetryPrice={fetchGoldPrice}
+                        onCalibrate={() => setShowCalibration(true)}
                         transactions={sortedGoldTransactions}
                         formatMoney={formatMoney}
                         formatMoneyOrDash={formatMoneyOrDash}
@@ -1151,6 +1162,29 @@ export default function App() {
                 showToast={showToast}
                 label="借貸帳本"
             />
+
+            {showCalibration && (
+                <CalibrationModal
+                    shownPrice={goldPrice}
+                    calibration={calibration}
+                    formatMoney={formatMoney}
+                    showToast={showToast}
+                    onClose={() => setShowCalibration(false)}
+                    onSave={(factor, reference) => {
+                        saveCalibration(factor, reference);
+                        setShowCalibration(false);
+                        showToast('已校準，重新取得金價中…');
+                        // 用新的倍率重新換算一次
+                        setTimeout(fetchGoldPrice, 100);
+                    }}
+                    onReset={() => {
+                        resetCalibration();
+                        setShowCalibration(false);
+                        showToast('已清除校準');
+                        setTimeout(fetchGoldPrice, 100);
+                    }}
+                />
+            )}
 
             {showIOSPrompt && <InstallPrompt platform="ios" onClose={() => setShowIOSPrompt(false)} />}
             {showAndroidPrompt && <InstallPrompt platform="android" onClose={() => setShowAndroidPrompt(false)} />}

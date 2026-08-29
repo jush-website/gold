@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describePriceSource, describeSeriesSource } from '../lib/gold-source.js';
+import { describePriceSource, describeSeriesSource, describePriceTitle } from '../lib/gold-source.js';
 
 describe('describePriceSource', () => {
   it('台銀即時牌價不需要特別警示', () => {
@@ -14,7 +14,7 @@ describe('describePriceSource', () => {
   it('國際金價換算要標成警示', () => {
     const r = describePriceSource('yahoo');
     expect(r.tone).toBe('warn');
-    expect(r.text).toContain('非台銀牌價');
+    expect(r.text).toContain('國際金價換算');
   });
 
   it('來源不明時不硬掰說明', () => {
@@ -42,10 +42,10 @@ describe('describeSeriesSource', () => {
     });
   });
 
-  it('用即時匯率換算的歷史仍要標明不是台銀牌價', () => {
-    const r = describeSeriesSource('90d', { historySource: 'yahoo' });
-    expect(r.tone).toBe('warn');
-    expect(r.text).toContain('非台銀牌價');
+  // 標題已經是「黃金參考價」、價格下方也標了「國際金價換算」，
+  // 圖表下方再講一次只是雜訊
+  it('走 Yahoo 的歷史不重複說明（標題已經講過）', () => {
+    expect(describeSeriesSource('90d', { historySource: 'yahoo' })).toBeNull();
   });
 
   // 這條路徑用寫死的匯率 32.5 換算，會有系統性誤差，必須讓使用者知道
@@ -58,5 +58,21 @@ describe('describeSeriesSource', () => {
   it('沒有來源資訊時回 null 而不是丟例外', () => {
     expect(describeSeriesSource('10d')).toBeNull();
     expect(describeSeriesSource('10d', {})).toBeNull();
+  });
+});
+
+describe('describePriceTitle', () => {
+  // 拿不到台銀牌價時，標題不能還寫「台銀賣出金價」
+  it('走 Yahoo 時標題不可自稱台銀', () => {
+    expect(describePriceTitle('yahoo')).toBe('黃金參考價');
+  });
+
+  it('台銀通了就顯示台銀', () => {
+    expect(describePriceTitle('bot')).toBe('台銀賣出金價');
+    expect(describePriceTitle('bot-close')).toBe('台銀賣出金價');
+  });
+
+  it('來源不明時用中性的說法', () => {
+    expect(describePriceTitle(null)).toBe('黃金價格');
   });
 });

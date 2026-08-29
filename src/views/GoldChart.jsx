@@ -2,7 +2,8 @@ import React, { useMemo, useRef, useState } from 'react';
 import { RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { formatMoneyOrDash } from '../../lib/format.js';
 import { sanitizeSeries, priceBounds, smoothPath } from '../../lib/chart.js';
-import { describePriceSource, describeSeriesSource } from '../../lib/gold-source.js';
+import { describePriceSource, describeSeriesSource, describePriceTitle } from '../../lib/gold-source.js';
+import { describeFactor } from '../../lib/calibration.js';
 import { Card, Figure, Segmented } from '../ui/primitives.jsx';
 
 const PERIODS = [
@@ -13,7 +14,7 @@ const PERIODS = [
 
 export default function GoldChart({
     data, intraday, period, setPeriod, loading, isVisible, toggleVisibility,
-    goldPrice, priceError, priceMeta = {}, onRetry,
+    goldPrice, priceError, priceMeta = {}, calibration, onRetry, onCalibrate,
 }) {
     const plotRef = useRef(null);
     const [hoverIndex, setHoverIndex] = useState(null);
@@ -49,6 +50,7 @@ export default function GoldChart({
     }, [series]);
 
     const priceNote = describePriceSource(priceMeta.priceSource);
+    const factorNote = describeFactor(calibration?.factor);
     const seriesNote = describeSeriesSource(period, priceMeta);
 
     const change = series.length > 1 ? series[series.length - 1].price - series[0].price : 0;
@@ -74,16 +76,36 @@ export default function GoldChart({
                 <div className="min-w-0">
                     <span className="flex items-center gap-1.5 mb-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${priceError ? 'bg-loss' : 'bg-gain animate-pulse'}`} />
-                        <span className="text-[11px] font-semibold tracking-[0.14em] uppercase text-ink-3">台銀賣出金價</span>
+                        <span className="text-[11px] font-semibold tracking-[0.14em] uppercase text-ink-3">
+                            {describePriceTitle(priceMeta.priceSource)}
+                        </span>
                     </span>
                     <span className="flex items-baseline gap-1.5">
                         <Figure size="lg">{formatMoneyOrDash(goldPrice)}</Figure>
                         <span className="text-xs text-ink-3">/ 克</span>
                     </span>
 
-                    {priceNote && (
-                        <span className={`block mt-1 text-[11px] ${priceNote.tone === 'warn' ? 'text-gold' : 'text-ink-3'}`}>
-                            {priceNote.text}
+                    {(priceNote || onCalibrate) && (
+                        <span className="mt-1 flex items-center gap-2 flex-wrap">
+                            {priceNote && (
+                                <span className={`text-[11px] ${priceNote.tone === 'warn' ? 'text-gold' : 'text-ink-3'}`}>
+                                    {priceNote.text}
+                                </span>
+                            )}
+                            {factorNote && (
+                                <span className="text-[11px] text-ink-3">已校準 {factorNote}</span>
+                            )}
+                            {onCalibrate && (
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); onCalibrate(); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onCalibrate(); } }}
+                                    className="text-[11px] font-semibold text-ink-3 hover:text-gold underline underline-offset-2"
+                                >
+                                    校準
+                                </span>
+                            )}
                         </span>
                     )}
 

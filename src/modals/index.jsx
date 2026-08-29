@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Check, Wallet, Calculator, Delete } from 'lucide-react';
 import { getLocalYMD } from '../../lib/format.js';
+import { computeFactor, describeFactor } from '../../lib/calibration.js';
 import { Sheet, Field, Button, Figure, Rule, inputClass, AmountInput, EmptyState } from '../ui/primitives.jsx';
 import { iconFor, ICON_MAP } from '../ui/icons.js';
 
@@ -617,6 +618,70 @@ export const CategoryModal = ({ onClose, onSave, initialData, defaultType, showT
                     })}
                 </div>
             </Field>
+        </Sheet>
+    );
+};
+
+// ── 金價校準 ────────────────────────────────────────────────
+
+// 使用者只要照抄台銀網站上的數字，倍率由程式算。
+// 要人自己算除法是很糟的設計。
+export const CalibrationModal = ({ onClose, onSave, onReset, shownPrice, calibration, formatMoney, showToast }) => {
+    const [input, setInput] = useState('');
+
+    const submit = () => {
+        const factor = computeFactor(input, shownPrice);
+        if (factor === null) {
+            return showToast('請輸入合理的台銀價格（與目前價差距過大）', 'error');
+        }
+        onSave(factor, Number(input));
+    };
+
+    const current = describeFactor(calibration?.factor);
+
+    return (
+        <Sheet
+            title="校準金價"
+            subtitle="讓顯示的價格貼近台銀牌價"
+            onClose={onClose}
+            footer={
+                <div className="flex gap-2">
+                    {current && (
+                        <Button variant="secondary" onClick={onReset}>清除校準</Button>
+                    )}
+                    <Button className="flex-1" onClick={submit}>套用</Button>
+                </div>
+            }
+        >
+            <p className="text-sm text-ink-2 leading-relaxed">
+                目前的價格是用國際金價換算的，與台銀實際牌價會有固定的價差。
+                到台銀網站查一下現在的「本行賣出／1 公克」，填在下面，
+                之後所有價格都會照這個比例調整。
+            </p>
+
+            <div className="flex items-center justify-between px-3.5 py-3 rounded-xl bg-surface-3 border border-line">
+                <span className="text-xs text-ink-3">App 目前顯示</span>
+                <Figure size="sm">{formatMoney(shownPrice)}</Figure>
+            </div>
+
+            <Field label="台銀實際賣出價 / 公克">
+                <AmountInput value={input} onChange={(e) => setInput(e.target.value)} autoFocus />
+            </Field>
+
+            {current && (
+                <div className="flex items-center justify-between px-3.5 py-3 rounded-xl bg-gold/8 border border-gold/25">
+                    <span className="text-xs text-ink-2">目前校準</span>
+                    <span className="text-xs tnum font-semibold text-gold">
+                        {current}
+                        {calibration.calibratedAt ? ` · ${calibration.calibratedAt}` : ''}
+                    </span>
+                </div>
+            )}
+
+            <p className="text-[11px] text-ink-3 leading-relaxed">
+                校準只存在這台裝置。金價變動時價差比例大致固定，
+                所以偶爾校準一次就夠，不需要每天調。
+            </p>
         </Sheet>
     );
 };

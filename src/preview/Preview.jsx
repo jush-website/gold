@@ -13,6 +13,7 @@ import HistoryView from '../views/HistoryView.jsx';
 import CalendarView from '../views/CalendarView.jsx';
 import CategoryManagerView from '../views/CategoryManagerView.jsx';
 import BackupView from '../views/BackupView.jsx';
+import { CalibrationModal } from '../modals/index.jsx';
 import * as mock from './mockData.js';
 
 const monthKey = getLocalYMD().slice(0, 7);
@@ -71,6 +72,7 @@ export default function Preview() {
     const [historyTab, setHistoryTab] = useState('stats');
     const [goldPeriod, setGoldPeriod] = useState('90d');
     const [selectedDate, setSelectedDate] = useState(getLocalYMD());
+    const [showCalib, setShowCalib] = useState(false);
 
     const money = { formatMoney, formatMoneyOrDash, formatWeight };
 
@@ -122,7 +124,9 @@ export default function Preview() {
                         goldHistory={mock.goldHistory} goldIntraday={mock.goldIntraday}
                         goldPeriod={goldPeriod} setGoldPeriod={setGoldPeriod}
                         priceLoading={false} priceError={false} onRetryPrice={noop}
-                        priceMeta={{ priceSource: 'bot', historySource: 'bot-csv', intradaySource: 'yahoo-gcf' }}
+                        priceMeta={{ priceSource: 'yahoo', historySource: 'yahoo', intradaySource: 'yahoo-gcf' }}
+                        calibration={{ factor: 1.0114, calibratedAt: '2026-08-29' }}
+                        onCalibrate={() => setShowCalib(true)}
                         transactions={mock.goldTransactions}
                         {...money} onAdd={noop} onEdit={noop} onDelete={noop}
                     />
@@ -169,6 +173,18 @@ export default function Preview() {
                     />
                 )}
             </main>
+
+            {showCalib && (
+                <CalibrationModal
+                    shownPrice={mock.goldPrice}
+                    calibration={{ factor: 1.0114, calibratedAt: '2026-08-29' }}
+                    formatMoney={formatMoney}
+                    showToast={noop}
+                    onClose={() => setShowCalib(false)}
+                    onSave={noop}
+                    onReset={noop}
+                />
+            )}
 
             <BottomNav currentView={view} onNavigate={setView} />
         </div>
