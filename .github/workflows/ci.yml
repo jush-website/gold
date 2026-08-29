@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安裝相依套件
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: 單元測試
+        run: npm run test
+
+      - name: 建置
+        run: npm run build
+        env:
+          # 建置時沒有真的 API Key 也要能過；
+          # App 會退回「請輸入設定」畫面，不影響建置本身。
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
