@@ -43,7 +43,6 @@ export default function GoldChart({
         return {
             points, x, y, min, max,
             line: smoothPath(points),
-            area: `${smoothPath(points)} L 100,100 L 0,100 Z`,
             hiIndex: hi, loIndex: lo,
             hiPrice: prices[hi], loPrice: prices[lo],
         };
@@ -154,42 +153,24 @@ export default function GoldChart({
                         <>
                             <div
                                 ref={plotRef}
-                                className="relative h-40 w-full touch-pan-y select-none"
+                                className="relative h-44 w-full touch-pan-y select-none"
                                 onMouseMove={(e) => track(e.clientX)}
                                 onMouseLeave={() => setHoverIndex(null)}
                                 onTouchStart={(e) => track(e.touches[0].clientX)}
                                 onTouchMove={(e) => track(e.touches[0].clientX)}
                                 onTouchEnd={() => setHoverIndex(null)}
                             >
-                                {/* 三條水平參考線，讓高低落差有個尺度 */}
-                                {[0, 50, 100].map((pct) => (
-                                    <span
-                                        key={pct}
-                                        className="absolute inset-x-0 h-px bg-line pointer-events-none"
-                                        style={{ top: `${pct}%` }}
-                                    />
-                                ))}
-
                                 <svg
                                     viewBox="0 0 100 100"
                                     preserveAspectRatio="none"
                                     className="absolute inset-0 w-full h-full"
                                     aria-hidden="true"
                                 >
-                                    <defs>
-                                        <linearGradient id="goldChartFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
-                                            <stop offset="55%" stopColor={stroke} stopOpacity="0.07" />
-                                            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
-                                        </linearGradient>
-                                    </defs>
-
-                                    <path d={geom.area} fill="url(#goldChartFill)" />
                                     <path
                                         d={geom.line}
                                         fill="none"
                                         stroke={stroke}
-                                        strokeWidth="2"
+                                        strokeWidth="1.5"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         vectorEffect="non-scaling-stroke"
@@ -199,7 +180,7 @@ export default function GoldChart({
                                         <line
                                             x1={geom.points[active][0]} y1="0"
                                             x2={geom.points[active][0]} y2="100"
-                                            stroke="rgb(var(--c-text) / 0.28)"
+                                            stroke="rgb(var(--c-text) / 0.2)"
                                             strokeWidth="1"
                                             strokeDasharray="2 3"
                                             vectorEffect="non-scaling-stroke"
@@ -207,20 +188,16 @@ export default function GoldChart({
                                     )}
                                 </svg>
 
-                                {/* 圓點與標籤用 HTML 疊在上面。
-                                    畫在 SVG 裡會被 preserveAspectRatio="none" 的非等比縮放壓成橢圓。 */}
-                                {[
-                                    { i: geom.hiIndex, label: '高' },
-                                    { i: geom.loIndex, label: '低' },
-                                ].map(({ i, label }) => (
-                                    <span
-                                        key={label}
-                                        className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                                        style={{ left: `${geom.points[i][0]}%`, top: `${geom.points[i][1]}%` }}
-                                    >
-                                        <span className="block w-1.5 h-1.5 rounded-full bg-ink-3" />
-                                    </span>
-                                ))}
+                                {/* 圓點用 HTML 疊在上面。畫在 SVG 裡會被
+                                    preserveAspectRatio="none" 的非等比縮放壓成橢圓。 */}
+
+                                {/* 起點：一個很輕的記號，標示這段區間從哪裡開始 */}
+                                <span
+                                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                                    style={{ left: `${geom.points[0][0]}%`, top: `${geom.points[0][1]}%` }}
+                                >
+                                    <span className="block w-1 h-1 rounded-full bg-ink-3/60" />
+                                </span>
 
                                 <span
                                     className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all duration-100"
@@ -235,10 +212,11 @@ export default function GoldChart({
                                 </span>
 
                                 {/* 區間高低標在右上／右下，取代看不懂的座標軸 */}
-                                <span className="absolute right-0 top-0 -translate-y-1 text-[10px] tnum text-ink-3 pointer-events-none bg-surface/80 px-1 rounded">
+                                {/* 沒有參考線了，區間高低靠這兩個數字定位 */}
+                                <span className="absolute right-0 -top-1 text-[10px] tnum text-ink-3/70 pointer-events-none">
                                     {Math.round(geom.hiPrice)}
                                 </span>
-                                <span className="absolute right-0 bottom-0 translate-y-1 text-[10px] tnum text-ink-3 pointer-events-none bg-surface/80 px-1 rounded">
+                                <span className="absolute right-0 -bottom-1 text-[10px] tnum text-ink-3/70 pointer-events-none">
                                     {Math.round(geom.loPrice)}
                                 </span>
                             </div>
