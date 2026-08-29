@@ -69,7 +69,7 @@ function Converter({ goldPrice, formatMoneyOrDash, isOpen, onToggle }) {
 
 export default function GoldView({
     goldStats, goldPrice, hasGoldPrice, goldHistory, goldIntraday,
-    goldPeriod, setGoldPeriod, priceLoading, priceError, onRetryPrice,
+    goldPeriod, setGoldPeriod, priceLoading, priceError, priceMeta, onRetryPrice,
     transactions,
     formatMoney, formatMoneyOrDash, formatWeight,
     onAdd, onEdit, onDelete,
@@ -118,6 +118,7 @@ export default function GoldView({
                 setPeriod={setGoldPeriod}
                 loading={priceLoading}
                 priceError={priceError}
+                priceMeta={priceMeta}
                 onRetry={onRetryPrice}
                 goldPrice={goldPrice}
                 isVisible={showChart}

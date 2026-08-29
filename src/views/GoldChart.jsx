@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { RefreshCw, Loader2, ChevronDown } from 'lucide-react';
 import { formatMoneyOrDash } from '../../lib/format.js';
 import { sanitizeSeries, priceBounds, smoothPath } from '../../lib/chart.js';
+import { describePriceSource, describeSeriesSource } from '../../lib/gold-source.js';
 import { Card, Figure, Segmented } from '../ui/primitives.jsx';
 
 const PERIODS = [
@@ -12,7 +13,7 @@ const PERIODS = [
 
 export default function GoldChart({
     data, intraday, period, setPeriod, loading, isVisible, toggleVisibility,
-    goldPrice, priceError, onRetry,
+    goldPrice, priceError, priceMeta = {}, onRetry,
 }) {
     const plotRef = useRef(null);
     const [hoverIndex, setHoverIndex] = useState(null);
@@ -47,6 +48,9 @@ export default function GoldChart({
         };
     }, [series]);
 
+    const priceNote = describePriceSource(priceMeta.priceSource);
+    const seriesNote = describeSeriesSource(period, priceMeta);
+
     const change = series.length > 1 ? series[series.length - 1].price - series[0].price : 0;
     const up = change >= 0;
     const stroke = up ? 'rgb(var(--c-gain))' : 'rgb(var(--c-loss))';
@@ -77,6 +81,12 @@ export default function GoldChart({
                         <span className="text-xs text-ink-3">/ 克</span>
                     </span>
 
+                    {priceNote && (
+                        <span className={`block mt-1 text-[11px] ${priceNote.tone === 'warn' ? 'text-gold' : 'text-ink-3'}`}>
+                            {priceNote.text}
+                        </span>
+                    )}
+
                     {priceError && (
                         <span className="mt-2 flex items-center gap-2">
                             <span className="text-[11px] font-semibold text-loss">金價暫時無法取得</span>
@@ -106,7 +116,7 @@ export default function GoldChart({
                             <span className={`text-xs tnum font-semibold ${up ? 'text-gain' : 'text-loss'}`}>
                                 {up ? '+' : '−'}{Math.abs(change).toFixed(0)}
                                 <span className="text-ink-3 font-normal ml-1.5">
-                                    · {((change / (series[0].price || 1)) * 100).toFixed(1)}%
+                                    ({up ? '+' : '−'}{Math.abs((change / (series[0].price || 1)) * 100).toFixed(1)}%)
                                 </span>
                             </span>
                         )}
@@ -211,7 +221,13 @@ export default function GoldChart({
                                 </span>
                             </div>
 
-                            <div className="flex items-baseline justify-between mt-4 pt-3 border-t border-line">
+                            {seriesNote && (
+                                <p className={`mt-3 text-[11px] leading-relaxed ${seriesNote.tone === 'warn' ? 'text-gold/80' : 'text-ink-3'}`}>
+                                    {seriesNote.tone === 'warn' ? '註：' : ''}{seriesNote.text}
+                                </p>
+                            )}
+
+                            <div className="flex items-baseline justify-between mt-3 pt-3 border-t border-line">
                                 <span className="text-[11px] text-ink-3">
                                     {hoverIndex === null ? '最新' : shown?.label}
                                 </span>

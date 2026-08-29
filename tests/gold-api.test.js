@@ -75,6 +75,43 @@ describe('/api/gold', () => {
     expect(res.headers['Cache-Control']).toBe('no-store');
   });
 
+  // 逾時的個別失敗必須被備援接住，不能讓整支 API 沒有回應
+  it('台銀逾時（AbortError）時仍能靠其他來源回應', async () => {
+    global.fetch = vi.fn(async (url) => {
+      if (String(url).includes('rate.bot.com.tw')) {
+        const err = new Error('The operation was aborted due to timeout');
+        err.name = 'TimeoutError';
+        throw err;
+      }
+      throw new Error('no other source in this test');
+    });
+    const res = mockRes();
+    await handler({}, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.currentPrice).toBeNull();
+  });
+
+  // 今日走勢畫的是國際期貨的形狀，不是台銀牌價，前端要靠這個欄位標示
+  it('有當日走勢時標記 intradaySource', async () => {
+    const yahooGold = JSON.stringify({
+      chart: { result: [{ timestamp: [1756000000, 1756000900], indicators: { quote: [{ close: [2500, 2510] }] } }] },
+    });
+    const yahooTwd = JSON.stringify({ chart: { result: [{ meta: { regularMarketPrice: 32.5 } }] } });
+
+    global.fetch = stubFetch({
+      '/gold/csv/': botCsv,
+      'GC=F?interval=15m': yahooGold,
+      'TWD=X': yahooTwd,
+    });
+    const res = mockRes();
+    await handler({}, res);
+
+    expect(res.body.intradaySource).toBe('yahoo-gcf');
+    expect(res.body.intraday.length).toBeGreaterThan(0);
+  });
+
   it('回應帶有 updatedAt 供前端顯示資料時間', async () => {
     global.fetch = stubFetch({ '/gold/csv/': botCsv });
     const res = mockRes();

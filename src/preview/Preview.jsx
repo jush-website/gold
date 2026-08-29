@@ -122,6 +122,7 @@ export default function Preview() {
                         goldHistory={mock.goldHistory} goldIntraday={mock.goldIntraday}
                         goldPeriod={goldPeriod} setGoldPeriod={setGoldPeriod}
                         priceLoading={false} priceError={false} onRetryPrice={noop}
+                        priceMeta={{ priceSource: 'bot', historySource: 'bot-csv', intradaySource: 'yahoo-gcf' }}
                         transactions={mock.goldTransactions}
                         {...money} onAdd={noop} onEdit={noop} onDelete={noop}
                     />

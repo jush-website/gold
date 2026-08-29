@@ -195,6 +195,8 @@ export default function App() {
     const [goldTransactions, setGoldTransactions] = useState([]);
     const [goldPrice, setGoldPrice] = useState(null); // null = 尚未取得，不可用假價格頂替
     const [priceError, setPriceError] = useState(false);
+    // 資料來源：讓畫面標示得出這是台銀牌價、上一交易日收盤，還是國際金價換算
+    const [priceMeta, setPriceMeta] = useState({});
     const [goldHistory, setGoldHistory] = useState([]);
     const [goldIntraday, setGoldIntraday] = useState([]);
     const [goldPeriod, setGoldPeriod] = useState('1d');
@@ -396,7 +398,15 @@ export default function App() {
             if (response && response.ok) {
                 const data = await response.json();
                 if (data.success && data.currentPrice) {
-                    setGoldPrice(data.currentPrice); setGoldHistory(data.history || []); setGoldIntraday(data.intraday || []);
+                    setGoldPrice(data.currentPrice);
+                    setGoldHistory(data.history || []);
+                    setGoldIntraday(data.intraday || []);
+                    setPriceMeta({
+                        priceSource: data.priceSource,
+                        historySource: data.historySource,
+                        intradaySource: data.intradaySource,
+                        updatedAt: data.updatedAt,
+                    });
                     setPriceLoading(false); return;
                 }
             }
@@ -409,7 +419,10 @@ export default function App() {
                 setGoldPrice(priceTwd);
                 const timestamps = gQuote.timestamp, closePrices = gQuote.indicators.quote[0].close;
                 const historyData = timestamps.map((ts, i) => (!closePrices[i] ? null : { date: new Date(ts * 1000).toISOString().split('T')[0], price: Math.floor((closePrices[i] * twdRate / 31.1035) * 1.005) })).filter(x => x).slice(-30);
-                setGoldHistory(historyData); setGoldIntraday([]); 
+                setGoldHistory(historyData);
+                setGoldIntraday([]);
+                // 這條路徑完全靠 Yahoo 換算，不是台銀牌價
+                setPriceMeta({ priceSource: 'yahoo', historySource: 'yahoo-estimated', intradaySource: null });
             } else { throw new Error("Client fetch failed"); }
         } catch (e) { 
             // 以前這裡會塞入 2950 與兩筆 2023 年的假歷史資料，
@@ -963,6 +976,7 @@ export default function App() {
                         setGoldPeriod={setGoldPeriod}
                         priceLoading={priceLoading}
                         priceError={priceError}
+                        priceMeta={priceMeta}
                         onRetryPrice={fetchGoldPrice}
                         transactions={sortedGoldTransactions}
                         formatMoney={formatMoney}

@@ -1,6 +1,12 @@
 // 這是運行在 Vercel 伺服器端的程式碼 (Node.js)
 import { parseBotGramPrice, parseBotCsv, usdOunceToTwdGram, GRAMS_PER_TROY_OUNCE } from '../lib/gold-parsers.js';
 
+// 每個外部請求都要有逾時。台銀不是快站台，四個請求串起來很容易
+// 拖到 Vercel function 的執行上限，那會變成整支 API 沒有回應。
+// 逾時的個別失敗會被下游的備援機制接住。
+const fetchWithTimeout = (url, options = {}, ms = 5000) =>
+  fetch(url, { ...options, signal: AbortSignal.timeout(ms) });
+
 export default async function handler(req, res) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -16,10 +22,11 @@ export default async function handler(req, res) {
     // 價格來源：讓前端知道這個數字是台銀牌價、上一個交易日收盤，還是國際金價換算
     let priceSource = null;
     let historySource = null;
+    let intradaySource = null;
     
     // --- 階段一：嘗試從 HTML 網頁抓取「台銀即時金價」 ---
     try {
-        const htmlResponse = await fetch('https://rate.bot.com.tw/gold?Lang=zh-TW', { headers });
+        const htmlResponse = await fetchWithTimeout('https://rate.bot.com.tw/gold?Lang=zh-TW', { headers }, 6000);
         if (htmlResponse.ok) {
             const html = await htmlResponse.text();
             const gramPrice = parseBotGramPrice(html);
@@ -35,7 +42,7 @@ export default async function handler(req, res) {
     // --- 階段二：無論階段一是否成功，都嘗試抓取 CSV 歷史紀錄 ---
     // (修正：之前的版本如果 currentPrice 是 0 就不會進來這裡，導致週末無法取得歷史價格)
     try {
-        const csvResponse = await fetch('https://rate.bot.com.tw/gold/csv/0', { headers });
+        const csvResponse = await fetchWithTimeout('https://rate.bot.com.tw/gold/csv/0', { headers }, 6000);
         if (csvResponse.ok) {
             const csvText = await csvResponse.text();
             // parseBotCsv 已保證回傳「舊 -> 新」的順序供圖表使用
@@ -63,8 +70,8 @@ export default async function handler(req, res) {
         const yahooTwdUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/TWD=X?interval=1d&range=1d'; 
 
         const [gRes, tRes] = await Promise.all([
-            fetch(yahooGoldUrl, { headers }),
-            fetch(yahooTwdUrl, { headers })
+            fetchWithTimeout(yahooGoldUrl, { headers }, 5000),
+            fetchWithTimeout(yahooTwdUrl, { headers }, 5000)
         ]);
 
         if (gRes.ok && tRes.ok) {
@@ -100,6 +107,10 @@ export default async function handler(req, res) {
                      const timeStr = d.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
                      return { date: d.toISOString(), price: Math.floor(p), label: timeStr };
                  }).filter(x => x !== null);
+
+                 // 這條曲線是 COMEX 黃金期貨（GC=F）的形狀乘上校正倍率，
+                 // 不是台銀當天的牌價變化 —— 前端必須據此標示清楚。
+                 if (intraday.length > 0) intradaySource = 'yahoo-gcf';
             }
         }
     } catch (e) {
@@ -109,7 +120,7 @@ export default async function handler(req, res) {
     // --- 備援機制：如果歷史資料還是空的，嘗試用 Yahoo 補歷史日線 ---
     if (history.length < 5) {
          try {
-            const yHistRes = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo', { headers });
+            const yHistRes = await fetchWithTimeout('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=3mo', { headers }, 5000);
             if (yHistRes.ok) {
                 const yData = await yHistRes.json();
                 const quotes = yData.chart.result[0];
@@ -158,6 +169,7 @@ export default async function handler(req, res) {
       currentPrice: currentPrice || null,
       priceSource,
       historySource,
+      intradaySource,
       history,
       intraday,
       updatedAt: new Date().toISOString()
