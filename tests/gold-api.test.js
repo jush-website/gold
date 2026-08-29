@@ -112,6 +112,67 @@ describe('/api/gold', () => {
     expect(res.body.intraday.length).toBeGreaterThan(0);
   });
 
+  // 台銀擋掉境外機房 IP 時，整條資料鏈會掉到 Yahoo 備援。
+  // 這時歷史與現價必須用同一個匯率基準，否則兩者的落差
+  // 分不出是真實漲跌還是換算誤差。
+  it('台銀全掛時，歷史改用即時匯率而非寫死的 32.5', async () => {
+    const yahooIntraday = JSON.stringify({
+      chart: { result: [{ timestamp: [1756000000], indicators: { quote: [{ close: [4500] }] } }] },
+    });
+    const yahooTwd = JSON.stringify({ chart: { result: [{ meta: { regularMarketPrice: 30 } }] } });
+    const yahooHistory = JSON.stringify({
+      chart: { result: [{ timestamp: [1755900000], indicators: { quote: [{ close: [4500] }] } }] },
+    });
+
+    global.fetch = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('rate.bot.com.tw')) throw new Error('blocked');
+      const body = u.includes('TWD=X') ? yahooTwd
+        : u.includes('interval=15m') ? yahooIntraday
+        : yahooHistory;
+      return { ok: true, text: async () => body, json: async () => JSON.parse(body) };
+    });
+
+    const res = mockRes();
+    await handler({}, res);
+
+    // 即時匯率是 30，用它換算而不是 32.5
+    expect(res.body.historySource).toBe('yahoo');
+    const expected = Math.floor(((4500 * 30) / 31.1034768) * 1.02);
+    expect(res.body.history[0].price).toBe(expected);
+  });
+
+  it('連匯率都拿不到時才退回估計值，並標明差別', async () => {
+    const yahooHistory = JSON.stringify({
+      chart: { result: [{ timestamp: [1755900000], indicators: { quote: [{ close: [4500] }] } }] },
+    });
+    global.fetch = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('rate.bot.com.tw') || u.includes('TWD=X') || u.includes('interval=15m')) {
+        throw new Error('unavailable');
+      }
+      return { ok: true, text: async () => yahooHistory, json: async () => JSON.parse(yahooHistory) };
+    });
+
+    const res = mockRes();
+    await handler({}, res);
+    expect(res.body.historySource).toBe('yahoo-estimated');
+  });
+
+  it('?debug=1 才附上各階段的失敗原因', async () => {
+    global.fetch = vi.fn(async () => { throw new Error('down'); });
+
+    const plain = mockRes();
+    await handler({}, plain);
+    expect(plain.body.diagnostics).toBeUndefined();
+
+    const debug = mockRes();
+    await handler({ query: { debug: '1' } }, debug);
+    expect(Array.isArray(debug.body.diagnostics)).toBe(true);
+    expect(debug.body.diagnostics.some((d) => d.startsWith('bot-html:'))).toBe(true);
+    expect(debug.body.diagnostics.some((d) => d.startsWith('bot-csv:'))).toBe(true);
+  });
+
   it('回應帶有 updatedAt 供前端顯示資料時間', async () => {
     global.fetch = stubFetch({ '/gold/csv/': botCsv });
     const res = mockRes();

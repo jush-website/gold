@@ -23,6 +23,12 @@ export default async function handler(req, res) {
     let priceSource = null;
     let historySource = null;
     let intradaySource = null;
+    // 即時匯率：階段三取得後，歷史備援也要用同一個基準，
+    // 否則歷史線與現價會落在不同的匯率上，兩者的差距分不出是漲跌還是換算誤差。
+    let liveTwdRate = null;
+    // 各階段的失敗原因。台銀擋境外機房 IP 是常見情況，
+    // 沒有這些訊息只會看到「資料是 Yahoo 來的」卻不知道為什麼。
+    const diagnostics = [];
     
     // --- 階段一：嘗試從 HTML 網頁抓取「台銀即時金價」 ---
     try {
@@ -33,10 +39,15 @@ export default async function handler(req, res) {
             if (gramPrice) {
                 currentPrice = gramPrice;
                 priceSource = 'bot';
+            } else {
+                diagnostics.push(`bot-html: 取得網頁但解析不到 1 公克牌價（${html.length} bytes）`);
             }
+        } else {
+            diagnostics.push(`bot-html: HTTP ${htmlResponse.status}`);
         }
     } catch (e) {
         console.warn("HTML Scraping failed:", e.message);
+        diagnostics.push(`bot-html: ${e.name} ${e.message}`);
     }
 
     // --- 階段二：無論階段一是否成功，都嘗試抓取 CSV 歷史紀錄 ---
@@ -51,10 +62,15 @@ export default async function handler(req, res) {
             if (parsedHistory.length > 0) {
                 historySource = 'bot-csv';
                 history = parsedHistory;
+            } else {
+                diagnostics.push(`bot-csv: 取得檔案但解析不到資料列（${csvText.length} bytes）`);
             }
+        } else {
+            diagnostics.push(`bot-csv: HTTP ${csvResponse.status}`);
         }
     } catch (e) {
         console.warn("CSV Fetch failed:", e.message);
+        diagnostics.push(`bot-csv: ${e.name} ${e.message}`);
     }
 
     // --- 關鍵修正：如果 HTML 抓不到價格 (週末休市)，使用歷史紀錄的最後一筆 (週五收盤價) ---
@@ -82,6 +98,7 @@ export default async function handler(req, res) {
             const timestamps = quote.timestamp;
             const prices = quote.indicators.quote[0].close;
             const twdRate = tData.chart.result[0].meta.regularMarketPrice;
+            liveTwdRate = twdRate;
             const ozToGram = GRAMS_PER_TROY_OUNCE; 
             
             if (timestamps && prices) {
@@ -115,6 +132,7 @@ export default async function handler(req, res) {
         }
     } catch (e) {
         console.error("Intraday fetch failed", e);
+        diagnostics.push(`yahoo-intraday: ${e.name} ${e.message}`);
     }
 
     // --- 備援機制：如果歷史資料還是空的，嘗試用 Yahoo 補歷史日線 ---
@@ -124,16 +142,18 @@ export default async function handler(req, res) {
             if (yHistRes.ok) {
                 const yData = await yHistRes.json();
                 const quotes = yData.chart.result[0];
-                const estTwdRate = 32.5; // 估計匯率
+                // 優先用階段三取得的即時匯率，與 currentPrice 同一個換算基準。
+                // 拿不到才退回估計值，並在 historySource 標明差別。
+                const rate = liveTwdRate || 32.5;
+                const rateIsEstimated = !liveTwdRate;
                 const premium = 1.02;
                 
                 if (quotes.timestamp && quotes.indicators.quote[0].close) {
-                    // 注意：這裡的匯率是估計值，只用來畫走勢形狀，不是精確台幣牌價
-                    historySource = 'yahoo-estimated';
+                    historySource = rateIsEstimated ? 'yahoo-estimated' : 'yahoo';
                     history = quotes.timestamp.map((ts, i) => {
                         const p = quotes.indicators.quote[0].close[i];
                         if (!p) return null;
-                        const priceTwd = Math.floor(((p * estTwdRate) / 31.1034768) * premium);
+                        const priceTwd = Math.floor(((p * rate) / GRAMS_PER_TROY_OUNCE) * premium);
                         const d = new Date(ts * 1000);
                         return {
                             date: d.toISOString().split('T')[0],
@@ -170,6 +190,8 @@ export default async function handler(req, res) {
       priceSource,
       historySource,
       intradaySource,
+      // 只有明確要求時才附上，平常保持回應乾淨
+      ...(req?.query?.debug ? { diagnostics, twdRate: liveTwdRate } : {}),
       history,
       intraday,
       updatedAt: new Date().toISOString()

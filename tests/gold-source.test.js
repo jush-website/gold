@@ -42,6 +42,12 @@ describe('describeSeriesSource', () => {
     });
   });
 
+  it('用即時匯率換算的歷史仍要標明不是台銀牌價', () => {
+    const r = describeSeriesSource('90d', { historySource: 'yahoo' });
+    expect(r.tone).toBe('warn');
+    expect(r.text).toContain('非台銀牌價');
+  });
+
   // 這條路徑用寫死的匯率 32.5 換算，會有系統性誤差，必須讓使用者知道
   it('估算的歷史資料要警示匯率是估計值', () => {
     const r = describeSeriesSource('90d', { historySource: 'yahoo-estimated' });
