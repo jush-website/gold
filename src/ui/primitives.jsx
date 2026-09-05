@@ -146,6 +146,27 @@ export const Segmented = ({ options, value, onChange, className = '' }) => (
     </div>
 );
 
+// 開關。用在「自動記帳」「啟用／暫停」這類是非設定。
+export const Toggle = ({ checked, onChange, label, hint }) => (
+    <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="w-full flex items-center gap-3 text-left"
+    >
+        <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-ink">{label}</span>
+            {hint && <span className="block text-[11px] text-ink-3 mt-0.5 leading-relaxed">{hint}</span>}
+        </span>
+        <span className={`shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors duration-200
+            ${checked ? 'bg-gold' : 'bg-surface-3 border border-line'}`}>
+            <span className={`block w-5 h-5 rounded-full transition-transform duration-200
+                ${checked ? 'translate-x-5 bg-ground' : 'translate-x-0 bg-ink-3'}`} />
+        </span>
+    </button>
+);
+
 // ── 空狀態 ──────────────────────────────────────────────────
 
 export const EmptyState = ({ icon: Icon, title, hint, action }) => (

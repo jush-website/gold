@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatMoney, formatMoneyOrDash, formatWeight, formatDate, formatMonth, getLocalYMD } from '../../lib/format.js';
 import { summarizeGold, summarizeDebts, splitDebtsBySettlement } from '../../lib/finance.js';
+import { summarizeSubscriptions } from '../../lib/subscriptions.js';
 import { useTheme } from '../ui/useTheme.js';
 import { TopBar, SettingsMenu, BottomNav } from '../ui/AppShell.jsx';
 import HomeView from '../views/HomeView.jsx';
@@ -13,7 +14,8 @@ import HistoryView from '../views/HistoryView.jsx';
 import CalendarView from '../views/CalendarView.jsx';
 import CategoryManagerView from '../views/CategoryManagerView.jsx';
 import BackupView from '../views/BackupView.jsx';
-import { CalibrationModal } from '../modals/index.jsx';
+import SubscriptionView from '../views/SubscriptionView.jsx';
+import { CalibrationModal, AddSubscriptionModal } from '../modals/index.jsx';
 import * as mock from './mockData.js';
 
 const monthKey = getLocalYMD().slice(0, 7);
@@ -55,6 +57,7 @@ const calendarDailyData = mock.expenses.reduce((acc, e) => {
 const goldStats = summarizeGold(mock.goldTransactions, mock.goldPrice);
 const debtStats = summarizeDebts(mock.debts);
 const { activeDebtsList, settledDebtsList } = splitDebtsBySettlement(mock.debts);
+const subscriptionStats = summarizeSubscriptions(mock.subscriptions);
 
 const now = new Date();
 const calYear = now.getFullYear();
@@ -73,6 +76,7 @@ export default function Preview() {
     const [goldPeriod, setGoldPeriod] = useState('90d');
     const [selectedDate, setSelectedDate] = useState(getLocalYMD());
     const [showCalib, setShowCalib] = useState(false);
+    const [showSubModal, setShowSubModal] = useState(false);
 
     const money = { formatMoney, formatMoneyOrDash, formatWeight };
 
@@ -82,7 +86,7 @@ export default function Preview() {
                 currentView={view}
                 bookName={mock.books[0].name}
                 onOpenBookManager={noop}
-                canGoBack={view === 'categories' || view === 'backup'}
+                canGoBack={['categories', 'backup', 'subscriptions'].includes(view)}
                 onBack={() => setView('home')}
                 showInstallBtn
                 onInstall={noop}
@@ -106,6 +110,7 @@ export default function Preview() {
                         goldStats={goldStats} goldPrice={mock.goldPrice} goldHistory={mock.goldHistory} hasGoldPrice
                         monthStats={monthStats} pieChartData={rank(thisMonth)} categories={mock.categories}
                         debtStats={debtStats} activeDebtCount={activeDebtsList.length}
+                        subscriptionStats={subscriptionStats}
                         recentExpenses={mock.expenses.slice(0, 5)} currentBookName={mock.books[0].name}
                         {...money} onNavigate={setView} onAddExpense={noop}
                     />
@@ -160,6 +165,13 @@ export default function Preview() {
                         onTouchStart={noop} onTouchEnd={noop}
                     />
                 )}
+                {view === 'subscriptions' && (
+                    <SubscriptionView
+                        subscriptions={mock.subscriptions} categories={mock.categories}
+                        todayYMD={getLocalYMD()} formatMoney={formatMoney}
+                        onAdd={() => setShowSubModal(true)} onEdit={() => setShowSubModal(true)} onDelete={noop}
+                    />
+                )}
                 {view === 'categories' && (
                     <CategoryManagerView categories={mock.categories} onSave={noop} onDelete={noop} showToast={noop} />
                 )}
@@ -173,6 +185,18 @@ export default function Preview() {
                     />
                 )}
             </main>
+
+            {showSubModal && (
+                <AddSubscriptionModal
+                    categories={mock.categories}
+                    books={mock.books}
+                    defaultBookId={mock.books[0].id}
+                    showToast={noop}
+                    onClose={() => setShowSubModal(false)}
+                    onSave={noop}
+                    onDelete={noop}
+                />
+            )}
 
             {showCalib && (
                 <CalibrationModal

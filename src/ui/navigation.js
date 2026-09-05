@@ -14,5 +14,6 @@ export const NAV_ITEMS = [
 export const VIEW_TITLES = {
     home: '資產總覽', gold: '黃金存摺', expense: '生活記帳', debt: '借貸還款',
     history: '歷史紀錄', calendar: '收支日曆', categories: '分類管理', backup: '備份與還原',
+    subscriptions: '訂閱管理',
 };
 

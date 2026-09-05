@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Settings, ChevronDown, Undo2, Download, Sun, Moon, LogOut, Tag, Database, Wallet,
+    Settings, ChevronDown, Undo2, Download, Sun, Moon, LogOut, Tag, Database, Wallet, RefreshCw,
 } from 'lucide-react';
 import { NAV_ITEMS, VIEW_TITLES } from './navigation.js';
 
@@ -91,6 +91,13 @@ export const SettingsMenu = ({ userName, isLight, onToggleTheme, onNavigate, onS
             >
                 {isLight ? <Moon size={16} /> : <Sun size={16} />}
                 {isLight ? '深色模式' : '淺色模式'}
+            </button>
+
+            <button
+                onClick={() => { onNavigate('subscriptions'); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-ink-2 hover:text-ink hover:bg-surface-3 border-t border-line transition-colors"
+            >
+                <RefreshCw size={16} /> 訂閱管理
             </button>
 
             <button

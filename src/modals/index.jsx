@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Check, Wallet, Calculator, Delete } from 'lucide-react';
 import { getLocalYMD } from '../../lib/format.js';
 import { computeFactor, describeFactor } from '../../lib/calibration.js';
-import { Sheet, Field, Button, Figure, Rule, inputClass, AmountInput, EmptyState } from '../ui/primitives.jsx';
+import { Sheet, Field, Button, Figure, Rule, Toggle, inputClass, AmountInput, EmptyState } from '../ui/primitives.jsx';
+import { CYCLES, CYCLE_KEYS, monthlyCost } from '../../lib/subscriptions.js';
 import { iconFor, ICON_MAP } from '../ui/icons.js';
 
 // ── 通用確認視窗 ────────────────────────────────────────────
@@ -682,6 +683,159 @@ export const CalibrationModal = ({ onClose, onSave, onReset, shownPrice, calibra
                 校準只存在這台裝置。金價變動時價差比例大致固定，
                 所以偶爾校準一次就夠，不需要每天調。
             </p>
+        </Sheet>
+    );
+};
+
+// ── 訂閱 ────────────────────────────────────────────────────
+
+export const AddSubscriptionModal = ({
+    onClose, onSave, onDelete, initialData,
+    categories, books, defaultBookId, showToast,
+}) => {
+    const [name, setName] = useState(initialData?.name || '');
+    const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
+    const [cycle, setCycle] = useState(initialData?.cycle || 'monthly');
+    const [nextBillingDate, setNextBillingDate] = useState(initialData?.nextBillingDate || getLocalYMD());
+    const [note, setNote] = useState(initialData?.note || '');
+    const [autoLog, setAutoLog] = useState(initialData?.autoLog ?? true);
+    const [active, setActive] = useState(initialData?.active ?? true);
+
+    const expenseCats = categories.filter((c) => c.type === 'expense');
+    const [categoryId, setCategoryId] = useState(initialData?.categoryId || expenseCats[0]?.id || '');
+    const [bookId, setBookId] = useState(initialData?.bookId || defaultBookId || books[0]?.id || '');
+
+    const effectiveCategory = expenseCats.some((c) => c.id === categoryId)
+        ? categoryId : (expenseCats[0]?.id || '');
+
+    const submit = () => {
+        if (!name.trim()) return showToast('請輸入訂閱名稱', 'error');
+        const value = parseFloat(amount);
+        if (!value || value <= 0) return showToast('請輸入有效金額', 'error');
+        if (autoLog && !effectiveCategory) return showToast('自動記帳需要先有支出分類', 'error');
+        if (autoLog && !bookId) return showToast('自動記帳需要先建立帳本', 'error');
+
+        onSave({
+            id: initialData?.id,
+            name: name.trim(),
+            amount: value,
+            cycle,
+            nextBillingDate,
+            categoryId: effectiveCategory,
+            bookId,
+            note,
+            autoLog,
+            active,
+            // 只在新增時設定：自動記帳不會補記訂閱建立之前的期數
+            autoLogFrom: initialData?.autoLogFrom || getLocalYMD(),
+        });
+    };
+
+    const preview = CYCLES[cycle] && parseFloat(amount) > 0
+        ? monthlyCost({ amount: parseFloat(amount), cycle })
+        : null;
+
+    return (
+        <Sheet
+            title={initialData ? '編輯訂閱' : '新增訂閱'}
+            onClose={onClose}
+            footer={
+                <div className="flex gap-2">
+                    {initialData && (
+                        <Button variant="danger" icon={Trash2} onClick={() => onDelete(initialData.id)} aria-label="刪除" />
+                    )}
+                    <Button className="flex-1" onClick={submit}>{initialData ? '儲存修改' : '新增訂閱'}</Button>
+                </div>
+            }
+        >
+            <Field label="名稱">
+                <input value={name} onChange={(e) => setName(e.target.value)}
+                    placeholder="Netflix、Spotify…" className={inputClass} autoFocus />
+            </Field>
+
+            <Field label="金額">
+                <AmountInput value={amount} onChange={(e) => setAmount(e.target.value)} tone="loss" />
+            </Field>
+
+            <Field label="扣款週期">
+                <div className="grid grid-cols-4 gap-2">
+                    {CYCLE_KEYS.map((key) => (
+                        <button
+                            key={key}
+                            onClick={() => setCycle(key)}
+                            className={`py-2 rounded-xl text-xs font-semibold border transition-all
+                                ${cycle === key ? 'bg-gold/12 border-gold/40 text-gold' : 'bg-surface-3 border-line text-ink-3'}`}
+                        >
+                            {CYCLES[key].label}
+                        </button>
+                    ))}
+                </div>
+                {preview != null && cycle !== 'monthly' && (
+                    <p className="text-[11px] text-ink-3 mt-2 tnum">
+                        換算成每月約 ${Math.round(preview).toLocaleString()}
+                    </p>
+                )}
+            </Field>
+
+            <Field label="下次扣款日">
+                <input type="date" value={nextBillingDate}
+                    onChange={(e) => setNextBillingDate(e.target.value)} className={inputClass} />
+            </Field>
+
+            <div className="px-3.5 py-3 rounded-xl bg-surface-3 border border-line space-y-4">
+                <Toggle
+                    checked={autoLog}
+                    onChange={setAutoLog}
+                    label="扣款日自動記一筆"
+                    hint="到期時自動寫入記帳。同一期只會寫入一次，重複開啟 App 不會重複記帳。"
+                />
+                <Toggle
+                    checked={active}
+                    onChange={setActive}
+                    label="啟用中"
+                    hint={active ? '計入每月訂閱花費' : '保留在清單裡，但不計入花費、也不自動記帳'}
+                />
+            </div>
+
+            {autoLog && (
+                <>
+                    <Field label="記到哪個分類">
+                        {expenseCats.length === 0 ? (
+                            <p className="text-xs text-ink-3 py-2">尚無支出分類，請先到「分類管理」新增。</p>
+                        ) : (
+                            <div className="grid grid-cols-4 gap-2">
+                                {expenseCats.map((c) => {
+                                    const Icon = iconFor(c.icon);
+                                    const on = effectiveCategory === c.id;
+                                    return (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => setCategoryId(c.id)}
+                                            className={`flex flex-col items-center gap-1.5 py-2.5 rounded-xl border transition-all
+                                                ${on ? 'bg-gold/12 border-gold/40 text-gold' : 'bg-surface-3 border-line text-ink-3'}`}
+                                        >
+                                            <Icon size={17} />
+                                            <span className="text-[10px] font-semibold truncate max-w-full px-1">{c.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </Field>
+
+                    {books.length > 1 && (
+                        <Field label="記到哪個帳本">
+                            <select value={bookId} onChange={(e) => setBookId(e.target.value)} className={inputClass}>
+                                {books.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                        </Field>
+                    )}
+                </>
+            )}
+
+            <Field label="備註">
+                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="選填" className={inputClass} />
+            </Field>
         </Sheet>
     );
 };

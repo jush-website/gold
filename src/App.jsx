@@ -17,6 +17,7 @@ import {
   getLocalYMD, getSortTime, generateId
 } from '../lib/format.js';
 import { splitDebtsBySettlement, summarizeDebts, summarizeGold } from '../lib/finance.js';
+import { summarizeSubscriptions, collectDueBillings } from '../lib/subscriptions.js';
 
 import { useTheme } from './ui/useTheme.js';
 import { useCalibration } from './ui/useCalibration.js';
@@ -32,12 +33,13 @@ import HistoryView from './views/HistoryView.jsx';
 import CalendarView from './views/CalendarView.jsx';
 import CategoryManagerView from './views/CategoryManagerView.jsx';
 import BackupView from './views/BackupView.jsx';
+import SubscriptionView from './views/SubscriptionView.jsx';
 import LoginView, { AppLoading } from './views/LoginView.jsx';
 
 import {
   Toast, ConfirmModal, InstallPrompt, CalibrationModal,
   AddExpenseModal, AddGoldModal, AddDebtModal, AddRepaymentModal,
-  DebtDetailsModal, BookManager,
+  DebtDetailsModal, BookManager, AddSubscriptionModal,
 } from './modals/index.jsx';
 
 // --- Firebase Configuration Management ---
@@ -220,6 +222,7 @@ export default function App() {
     
     const [allExpenses, setAllExpenses] = useState([]);
     const [allDebts, setAllDebts] = useState([]);
+    const [subscriptions, setSubscriptions] = useState([]);
     const [categories, setCategories] = useState([]);
     
     // History specific state
@@ -243,6 +246,9 @@ export default function App() {
     const [goldToDelete, setGoldToDelete] = useState(null);
     const [showBookManager, setShowBookManager] = useState(false);
     const [showDebtBookManager, setShowDebtBookManager] = useState(false);
+    const [showSubscriptionAdd, setShowSubscriptionAdd] = useState(false);
+    const [editingSubscription, setEditingSubscription] = useState(null);
+    const [subscriptionToDelete, setSubscriptionToDelete] = useState(null);
 
     // Debt UI State
     const [showDebtAdd, setShowDebtAdd] = useState(false);
@@ -365,12 +371,17 @@ export default function App() {
             }
         });
 
+        const subsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'subscriptions');
+        const unsubSubs = onSnapshot(query(subsRef, orderBy('createdAt', 'desc')), (snap) => {
+            setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
         const debtsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'debts');
         const unsubDebts = onSnapshot(query(debtsRef, orderBy('createdAt', 'desc')), (snap) => {
             setAllDebts(snap.docs.map(d => ({id:d.id, ...d.data()})));
         });
 
-        return () => { unsubGold(); unsubBooks(); unsubDebtBooks(); unsubCat(); unsubDebts(); };
+        return () => { unsubGold(); unsubBooks(); unsubDebtBooks(); unsubCat(); unsubDebts(); unsubSubs(); };
     }, [user]);
 
     useEffect(() => {
@@ -579,6 +590,32 @@ export default function App() {
         } catch (e) { showToast(`刪除分類失敗: ${e.message}`, "error"); }
     };
 
+    // --- 訂閱 CRUD ---
+    const handleSubscriptionSave = async (data) => {
+        try {
+            const { id, ...payload } = data;
+            if (id) {
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'subscriptions', String(id)),
+                    { ...payload, updatedAt: serverTimestamp() });
+                showToast("訂閱已更新");
+            } else {
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'subscriptions'),
+                    { ...payload, createdAt: serverTimestamp() });
+                showToast("新增訂閱成功");
+            }
+            setShowSubscriptionAdd(false); setEditingSubscription(null);
+        } catch (e) { showToast(`儲存訂閱失敗: ${e.message}`, "error"); }
+    };
+
+    const handleSubscriptionDelete = async (id) => {
+        if (!id) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'subscriptions', String(id)));
+            setShowSubscriptionAdd(false); setEditingSubscription(null);
+            showToast("已刪除訂閱");
+        } catch (e) { showToast(`刪除失敗: ${e.message}`, "error"); }
+    };
+
     // --- DEBT specific CRUD ---
     const handleDebtSave = async (data) => {
         if (!data.bookId) return showToast("未選擇借貸帳本", "error");
@@ -778,6 +815,68 @@ export default function App() {
         setTouchStartY(null);
     };
 
+    const subscriptionStats = useMemo(() => summarizeSubscriptions(subscriptions), [subscriptions]);
+
+    // 訂閱到期自動記帳。
+    //
+    // 每一期的 document id 是「sub-{訂閱ID}-{扣款日}」這個固定值，
+    // 用 setDoc 而不是 addDoc —— 兩個分頁同時開、中途重整、多台裝置一起跑，
+    // 寫進去的都是同一份文件，不可能變成兩筆。這比事後檢查重複可靠得多。
+    //
+    // 寫完才推進 nextBillingDate；推進失敗的話下次進來會再寫一次同樣的 id，
+    // 結果一樣，不會多記。
+    const subscriptionsRef = useRef(subscriptions);
+    useEffect(() => { subscriptionsRef.current = subscriptions; }, [subscriptions]);
+
+    useEffect(() => {
+        if (!user || !isConfigured || subscriptions.length === 0) return;
+
+        let cancelled = false;
+        const run = async () => {
+            const today = getLocalYMD();
+
+            for (const sub of subscriptionsRef.current) {
+                if (cancelled) return;
+                const { billings, nextBillingDate } = collectDueBillings(sub, today);
+                if (billings.length === 0) continue;
+
+                try {
+                    for (const billing of billings) {
+                        await setDoc(
+                            doc(db, 'artifacts', appId, 'users', user.uid, 'expense_transactions', billing.id),
+                            {
+                                amount: billing.amount,
+                                date: billing.date,
+                                type: 'expense',
+                                category: sub.categoryId || '',
+                                bookId: sub.bookId || '',
+                                itemName: sub.name,
+                                note: '訂閱自動記帳',
+                                subscriptionId: sub.id,
+                                createdAt: serverTimestamp(),
+                            },
+                        );
+                    }
+
+                    await updateDoc(
+                        doc(db, 'artifacts', appId, 'users', user.uid, 'subscriptions', String(sub.id)),
+                        { nextBillingDate, lastAutoLogAt: getLocalYMD() },
+                    );
+
+                    if (!cancelled) {
+                        showToast(`已為「${sub.name}」自動記帳 ${billings.length} 筆`);
+                    }
+                } catch (e) {
+                    console.warn(`訂閱「${sub.name}」自動記帳失敗:`, e?.message || e);
+                }
+            }
+        };
+
+        run();
+        return () => { cancelled = true; };
+        // 只在登入後與訂閱數量變動時檢查；清單內容的變動由 ref 讀取最新值
+    }, [user, subscriptions.length]);
+
     // 歷史頁的當月統計與分類排名
     const historyStats = useMemo(() => {
         const income = currentHistoryRecords.filter(e => e.type === 'income')
@@ -941,6 +1040,7 @@ export default function App() {
                         categories={categories}
                         debtStats={debtStats}
                         activeDebtCount={activeDebtsList.length}
+                        subscriptionStats={subscriptionStats}
                         recentExpenses={expenses.slice(0, 5)}
                         currentBookName={currentBook?.name || '未選擇帳本'}
                         formatMoney={formatMoney}
@@ -1060,6 +1160,18 @@ export default function App() {
                     />
                 )}
 
+                {currentView === 'subscriptions' && (
+                    <SubscriptionView
+                        subscriptions={subscriptions}
+                        categories={categories}
+                        todayYMD={getLocalYMD()}
+                        formatMoney={formatMoney}
+                        onAdd={() => { setEditingSubscription(null); setShowSubscriptionAdd(true); }}
+                        onEdit={(sub) => { setEditingSubscription(sub); setShowSubscriptionAdd(true); }}
+                        onDelete={(sub) => setSubscriptionToDelete(sub)}
+                    />
+                )}
+
                 {currentView === 'categories' && (
                     <CategoryManagerView
                         categories={categories}
@@ -1161,6 +1273,27 @@ export default function App() {
                 setCurrentBookId={setCurrentDebtBookId}
                 showToast={showToast}
                 label="借貸帳本"
+            />
+
+            {showSubscriptionAdd && (
+                <AddSubscriptionModal
+                    initialData={editingSubscription}
+                    categories={categories}
+                    books={books}
+                    defaultBookId={currentBookId}
+                    showToast={showToast}
+                    onClose={() => { setShowSubscriptionAdd(false); setEditingSubscription(null); }}
+                    onSave={handleSubscriptionSave}
+                    onDelete={handleSubscriptionDelete}
+                />
+            )}
+
+            <ConfirmModal
+                isOpen={!!subscriptionToDelete}
+                title="刪除訂閱"
+                message={`確定要刪除「${subscriptionToDelete?.name}」嗎？已經記錄的帳目不會一起刪除。`}
+                onConfirm={() => { handleSubscriptionDelete(subscriptionToDelete.id); setSubscriptionToDelete(null); }}
+                onCancel={() => setSubscriptionToDelete(null)}
             />
 
             {showCalibration && (
