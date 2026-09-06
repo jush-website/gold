@@ -1,5 +1,8 @@
 import React from 'react';
-import { X, Loader2, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Loader2, ChevronRight, Keyboard } from 'lucide-react';
+import NumericKeypad from './NumericKeypad.jsx';
+import { toDisplay } from '../../lib/keypad.js';
 
 // ── 版面 ────────────────────────────────────────────────────
 
@@ -248,5 +251,51 @@ export const AmountInput = ({ value, onChange, tone = 'gold', prefix = '$', ...r
                 {...rest}
             />
         </div>
+    );
+};
+
+// 金額輸入，但改叫 App 自己的數字鍵盤。
+// 欄位本身是 <button> 不是 <input>，手機系統鍵盤因此完全不會被喚起 ——
+// 這正是重點：系統鍵盤的數字鍵太小、容易誤觸。
+export const KeypadAmountInput = ({
+    value, onChange, tone = 'gold', prefix = '$', title = '輸入金額', allowDecimal = true,
+}) => {
+    const [open, setOpen] = React.useState(false);
+    const toneClass = {
+        gold: { text: 'text-gold', ring: 'border-gold/50 ring-2 ring-gold/15' },
+        gain: { text: 'text-gain', ring: 'border-gain/50 ring-2 ring-gain/15' },
+        loss: { text: 'text-loss', ring: 'border-loss/50 ring-2 ring-loss/15' },
+    }[tone];
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className={`w-full flex items-baseline gap-2 bg-surface-3 border rounded-2xl px-4 py-3.5
+                    text-left transition-colors ${toneClass.text}
+                    ${open ? toneClass.ring : 'border-line'}`}
+            >
+                <span className="text-lg font-semibold opacity-50">{prefix}</span>
+                <span className={`flex-1 min-w-0 truncate figure text-3xl font-semibold
+                    ${value === '' || value == null ? 'opacity-30' : ''}`}>
+                    {value === '' || value == null ? '0' : toDisplay(value)}
+                </span>
+                <span className="shrink-0 text-ink-3"><Keyboard size={17} /></span>
+            </button>
+
+            {/* 用 portal 掛到 body：Field 是 <label>，鍵盤若留在它底下，
+                每按一個鍵都會連帶觸發上面那顆欄位按鈕，無障礙名稱也會被鍵盤內容灌爆。 */}
+            {open && createPortal(
+                <NumericKeypad
+                    value={value}
+                    onChange={onChange}
+                    onClose={() => setOpen(false)}
+                    title={title}
+                    allowDecimal={allowDecimal}
+                />,
+                document.body,
+            )}
+        </>
     );
 };

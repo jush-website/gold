@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, Check, Wallet, Calculator, Delete } from 'lucide-react';
 import { getLocalYMD } from '../../lib/format.js';
 import { computeFactor, describeFactor } from '../../lib/calibration.js';
-import { Sheet, Field, Button, Figure, Rule, Toggle, inputClass, AmountInput, EmptyState } from '../ui/primitives.jsx';
+import { Sheet, Field, Button, Figure, Rule, Toggle, inputClass, AmountInput, KeypadAmountInput, EmptyState } from '../ui/primitives.jsx';
 import { CYCLES, CYCLE_KEYS, monthlyCost } from '../../lib/subscriptions.js';
 import { iconFor, ICON_MAP } from '../ui/icons.js';
 
@@ -754,7 +754,7 @@ export const AddSubscriptionModal = ({
             </Field>
 
             <Field label="金額">
-                <AmountInput value={amount} onChange={(e) => setAmount(e.target.value)} tone="loss" />
+                <KeypadAmountInput value={amount} onChange={setAmount} tone="loss" title="訂閱金額" />
             </Field>
 
             <Field label="扣款週期">

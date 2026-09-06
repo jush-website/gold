@@ -1,7 +1,47 @@
-import React from 'react';
-import { ChevronLeft, ChevronRight, History, Edit2, Trash2 } from 'lucide-react';
-import { Card, Figure, DeltaFigure, EmptyState, Segmented, Rule } from '../ui/primitives.jsx';
+import React, { useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronDown, History, Edit2, Trash2 } from 'lucide-react';
+import { Card, Figure, DeltaFigure, EmptyState, Segmented, Rule, Sheet } from '../ui/primitives.jsx';
 import { iconFor, colorForIndex } from '../ui/icons.js';
+
+// 單筆交易列。統計分析的分類明細與交易明細分頁共用同一個樣子，
+// 使用者從哪一條路徑點進來看到的都一致。
+const TxRow = ({ item, categories, formatMoney, onEdit, onDelete }) => {
+    const cat = categories.find((c) => c.id === item.category);
+    const income = item.type === 'income';
+    // iconFor 是查表不是動態產生元件，但寫成 const Icon = ... 會被
+    // react-hooks/static-components 誤判，所以這裡直接 createElement。
+    const icon = React.createElement(iconFor(cat?.icon), { size: 16 });
+    return (
+        <div className="flex items-center gap-3 px-4 py-3">
+            <span className={`w-9 h-9 rounded-xl grid place-items-center shrink-0
+                ${income ? 'bg-gain/12 text-gain' : 'bg-surface-3 text-ink-2'}`}>
+                {icon}
+            </span>
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-ink truncate">
+                    {item.itemName || cat?.name || '未分類'}
+                </p>
+                <p className="text-[11px] text-ink-3 mt-0.5 truncate">
+                    {item.date?.slice(5).replace('-', '/')} · {cat?.name || '未分類'}
+                    {item.note ? ` · ${item.note}` : ''}
+                </p>
+            </div>
+            <Figure size="sm" tone={income ? 'gain' : 'default'}>
+                {income ? '+' : '−'}{formatMoney(item.amount)}
+            </Figure>
+            <div className="flex flex-col gap-0.5 pl-2 border-l border-line shrink-0">
+                <button aria-label="編輯" onClick={() => onEdit(item)}
+                    className="p-1.5 rounded-lg text-ink-3 hover:text-gold hover:bg-surface-3 transition-colors">
+                    <Edit2 size={13} />
+                </button>
+                <button aria-label="刪除" onClick={() => onDelete(item)}
+                    className="p-1.5 rounded-lg text-ink-3 hover:text-loss hover:bg-loss/10 transition-colors">
+                    <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
 
 export default function HistoryView({
     monthLabel, records, stats, ranking, categories,
@@ -10,6 +50,15 @@ export default function HistoryView({
     onEdit, onDelete,
     onTouchStart, onTouchEnd,
 }) {
+    // 點進某個分類看它這個月到底花在哪些東西上
+    const [detailCatId, setDetailCatId] = useState(null);
+
+    const detailRow = detailCatId == null ? null : ranking.find((r) => r.id === detailCatId);
+    const detailRecords = detailCatId == null ? [] : records
+        .filter((e) => e.type === 'expense' && (e.category || 'other') === detailCatId)
+        // 由大到小：想知道「錢花去哪」的時候，最大那筆最有用
+        .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+
     return (
         <div className="h-full flex flex-col" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div className="shrink-0 px-4 pt-2 pb-3 space-y-3">
@@ -62,75 +111,98 @@ export default function HistoryView({
                         </Card>
 
                         <Card className="p-5">
-                            <h3 className="text-[11px] font-semibold tracking-[0.14em] uppercase text-ink-3 mb-4">分類支出排名</h3>
+                            <h3 className="text-[11px] font-semibold tracking-[0.14em] uppercase text-ink-3 mb-1">分類支出排名</h3>
                             {ranking.length === 0 ? (
-                                <p className="text-xs text-ink-3">本月沒有支出</p>
+                                <p className="text-xs text-ink-3 mt-3">本月沒有支出</p>
                             ) : (
-                                <div className="space-y-3">
-                                    {ranking.map((row, i) => {
-                                        const Icon = iconFor(categories.find((c) => c.id === row.id)?.icon);
-                                        return (
-                                            <div key={row.id}>
-                                                <div className="flex items-center gap-2.5 mb-1.5">
-                                                    <Icon size={14} className="text-ink-3 shrink-0" />
-                                                    <span className="flex-1 text-xs font-medium text-ink-2 truncate">{row.name}</span>
-                                                    <span className="text-[11px] tnum text-ink-3">{row.percent.toFixed(0)}%</span>
-                                                    <Figure size="xs">{formatMoney(row.amount)}</Figure>
-                                                </div>
-                                                <span className="block h-1.5 rounded-full bg-surface-3 overflow-hidden">
-                                                    <span className="block h-full rounded-full transition-[width] duration-700"
-                                                        style={{ width: `${Math.max(row.percent, 2)}%`, backgroundColor: colorForIndex(i) }} />
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                <>
+                                    <p className="text-[11px] text-ink-3 mb-4">點一下分類看明細</p>
+                                    <div className="space-y-1">
+                                        {ranking.map((row, i) => {
+                                            const Icon = iconFor(categories.find((c) => c.id === row.id)?.icon);
+                                            return (
+                                                <button
+                                                    key={row.id}
+                                                    onClick={() => setDetailCatId(row.id)}
+                                                    className="w-full text-left -mx-2 px-2 py-2 rounded-xl
+                                                        transition-colors hover:bg-surface-3 active:bg-surface-3"
+                                                >
+                                                    <div className="flex items-center gap-2.5 mb-1.5">
+                                                        <Icon size={14} className="text-ink-3 shrink-0" />
+                                                        <span className="flex-1 text-xs font-medium text-ink-2 truncate">{row.name}</span>
+                                                        <span className="text-[11px] tnum text-ink-3">{row.percent.toFixed(0)}%</span>
+                                                        <Figure size="xs">{formatMoney(row.amount)}</Figure>
+                                                        <ChevronRight size={13} className="text-ink-3 shrink-0" />
+                                                    </div>
+                                                    <span className="block h-1.5 rounded-full bg-surface-3 overflow-hidden">
+                                                        <span className="block h-full rounded-full transition-[width] duration-700"
+                                                            style={{ width: `${Math.max(row.percent, 2)}%`, backgroundColor: colorForIndex(i) }} />
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </>
                             )}
                         </Card>
                     </div>
                 ) : (
                     <Card className="overflow-hidden">
-                        {records.map((item, i) => {
-                            const cat = categories.find((c) => c.id === item.category);
-                            const Icon = iconFor(cat?.icon);
-                            const income = item.type === 'income';
-                            return (
-                                <React.Fragment key={item.id}>
-                                    {i > 0 && <Rule className="mx-4" />}
-                                    <div className="flex items-center gap-3 px-4 py-3">
-                                        <span className={`w-9 h-9 rounded-xl grid place-items-center shrink-0
-                                            ${income ? 'bg-gain/12 text-gain' : 'bg-surface-3 text-ink-2'}`}>
-                                            <Icon size={16} />
-                                        </span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-ink truncate">
-                                                {item.itemName || cat?.name || '未分類'}
-                                            </p>
-                                            <p className="text-[11px] text-ink-3 mt-0.5 truncate">
-                                                {item.date?.slice(5).replace('-', '/')} · {cat?.name || '未分類'}
-                                                {item.note ? ` · ${item.note}` : ''}
-                                            </p>
-                                        </div>
-                                        <Figure size="sm" tone={income ? 'gain' : 'default'}>
-                                            {income ? '+' : '−'}{formatMoney(item.amount)}
-                                        </Figure>
-                                        <div className="flex flex-col gap-0.5 pl-2 border-l border-line shrink-0">
-                                            <button aria-label="編輯" onClick={() => onEdit(item)}
-                                                className="p-1.5 rounded-lg text-ink-3 hover:text-gold hover:bg-surface-3 transition-colors">
-                                                <Edit2 size={13} />
-                                            </button>
-                                            <button aria-label="刪除" onClick={() => onDelete(item)}
-                                                className="p-1.5 rounded-lg text-ink-3 hover:text-loss hover:bg-loss/10 transition-colors">
-                                                <Trash2 size={13} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </React.Fragment>
-                            );
-                        })}
+                        {records.map((item, i) => (
+                            <React.Fragment key={item.id}>
+                                {i > 0 && <Rule className="mx-4" />}
+                                <TxRow
+                                    item={item}
+                                    categories={categories}
+                                    formatMoney={formatMoney}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
+                                />
+                            </React.Fragment>
+                        ))}
                     </Card>
                 )}
             </div>
+
+            {detailRow && (
+                <Sheet
+                    title={detailRow.name}
+                    subtitle={`${monthLabel} · ${detailRecords.length} 筆`}
+                    onClose={() => setDetailCatId(null)}
+                >
+                    <div className="flex items-baseline justify-between px-1">
+                        <div>
+                            <p className="text-[10px] font-semibold tracking-[0.14em] uppercase text-ink-3 mb-1.5">合計</p>
+                            <Figure size="lg" tone="loss">{formatMoney(detailRow.amount)}</Figure>
+                        </div>
+                        <p className="text-xs text-ink-3">
+                            佔當月支出 <span className="tnum text-ink-2 font-semibold">{detailRow.percent.toFixed(0)}%</span>
+                        </p>
+                    </div>
+
+                    <Card className="overflow-hidden">
+                        {detailRecords.map((item, i) => (
+                            <React.Fragment key={item.id}>
+                                {i > 0 && <Rule className="mx-4" />}
+                                <TxRow
+                                    item={item}
+                                    categories={categories}
+                                    formatMoney={formatMoney}
+                                    // 編輯要開另一個表單，先把明細關掉才不會兩層疊在一起
+                                    onEdit={(rec) => { setDetailCatId(null); onEdit(rec); }}
+                                    onDelete={onDelete}
+                                />
+                            </React.Fragment>
+                        ))}
+                    </Card>
+
+                    {detailRecords.length > 1 && (
+                        <p className="text-[11px] text-ink-3 text-center flex items-center justify-center gap-1">
+                            <ChevronDown size={12} /> 由大到小排序
+                        </p>
+                    )}
+                </Sheet>
+            )}
         </div>
     );
 }
