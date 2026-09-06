@@ -231,36 +231,16 @@ export const inputClass =
      placeholder:text-ink-3 outline-none transition-colors
      focus:border-gold/50 focus:ring-2 focus:ring-gold/15`;
 
-// 大金額輸入（新增記帳、新增還款的主要欄位）
-export const AmountInput = ({ value, onChange, tone = 'gold', prefix = '$', ...rest }) => {
-    const toneRing = {
-        gold: 'focus-within:border-gold/50 focus-within:ring-gold/15 text-gold',
-        gain: 'focus-within:border-gain/50 focus-within:ring-gain/15 text-gain',
-        loss: 'focus-within:border-loss/50 focus-within:ring-loss/15 text-loss',
-    }[tone];
-    return (
-        <div className={`flex items-baseline gap-2 bg-surface-3 border border-line rounded-2xl px-4 py-3.5
-            transition-colors focus-within:ring-2 ${toneRing}`}>
-            <span className="text-lg font-semibold opacity-50">{prefix}</span>
-            <input
-                value={value}
-                onChange={onChange}
-                inputMode="decimal"
-                placeholder="0"
-                className="flex-1 min-w-0 bg-transparent outline-none figure text-3xl font-semibold placeholder:opacity-30"
-                {...rest}
-            />
-        </div>
-    );
-};
-
 // 金額輸入，但改叫 App 自己的數字鍵盤。
 // 欄位本身是 <button> 不是 <input>，手機系統鍵盤因此完全不會被喚起 ——
 // 這正是重點：系統鍵盤的數字鍵太小、容易誤觸。
 export const KeypadAmountInput = ({
-    value, onChange, tone = 'gold', prefix = '$', title = '輸入金額', allowDecimal = true,
+    value, onChange, tone = 'gold', prefix = '$', title = '輸入金額',
+    allowDecimal = true, autoOpen = false,
 }) => {
-    const [open, setOpen] = React.useState(false);
+    // autoOpen 取代原本的 autoFocus：這些欄位以前一打開表單就會自動彈出
+    // 系統鍵盤，現在改成自動彈出 App 自己的鍵盤，行為一致。
+    const [open, setOpen] = React.useState(autoOpen);
     const toneClass = {
         gold: { text: 'text-gold', ring: 'border-gold/50 ring-2 ring-gold/15' },
         gain: { text: 'text-gain', ring: 'border-gain/50 ring-2 ring-gain/15' },

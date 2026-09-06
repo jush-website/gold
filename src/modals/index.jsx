@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Check, Wallet, Calculator, Delete } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, Wallet } from 'lucide-react';
 import { getLocalYMD } from '../../lib/format.js';
 import { computeFactor, describeFactor } from '../../lib/calibration.js';
-import { Sheet, Field, Button, Figure, Rule, Toggle, inputClass, AmountInput, KeypadAmountInput, EmptyState } from '../ui/primitives.jsx';
+import { Sheet, Field, Button, Figure, Rule, Toggle, inputClass, KeypadAmountInput, EmptyState } from '../ui/primitives.jsx';
 import { CYCLES, CYCLE_KEYS, monthlyCost } from '../../lib/subscriptions.js';
 import { iconFor, ICON_MAP } from '../ui/icons.js';
 
@@ -36,74 +36,6 @@ export const Toast = ({ message, type }) => {
     );
 };
 
-// ── 計算機鍵盤 ──────────────────────────────────────────────
-
-const KEYS = [
-    ['7', '8', '9', '÷'], ['4', '5', '6', '×'],
-    ['1', '2', '3', '−'], ['C', '0', '.', '+'],
-];
-const OPS = { '÷': '/', '×': '*', '−': '-', '+': '+' };
-
-export const CalculatorKeypad = ({ onResult, initialValue = '' }) => {
-    const [expr, setExpr] = useState(initialValue ? String(initialValue) : '');
-
-    const press = (key) => {
-        if (key === 'C') return setExpr('');
-        if (key === 'DEL') return setExpr((e) => e.slice(0, -1));
-        if (key === '=') {
-            try {
-                // 先過濾成只剩數字與四則運算符號，再求值
-                const safe = expr.replace(/[^0-9+\-*/.]/g, '');
-                if (!safe) return;
-                const result = new Function(`return ${safe}`)();
-                const final = Number(result);
-                if (!Number.isFinite(final)) return setExpr('');
-                onResult(String(Math.round(final)));
-            } catch (e) {
-                console.warn('計算式無法解析:', expr, e?.message || e);
-                setExpr('');
-            }
-            return;
-        }
-        const op = OPS[key];
-        if (op) {
-            setExpr((e) => (e === '' ? e : /[+\-*/]$/.test(e) ? e.slice(0, -1) + op : e + op));
-        } else {
-            setExpr((e) => e + key);
-        }
-    };
-
-    const display = expr.replace(/\*/g, '×').replace(/\//g, '÷').replace(/-/g, '−') || '0';
-
-    return (
-        <div className="bg-surface-2 border-t border-line p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <div className="px-3 py-2.5 mb-2 rounded-xl bg-surface-3 text-right figure text-2xl font-semibold text-ink truncate">
-                {display}
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-                {KEYS.flat().map((k) => (
-                    <button
-                        key={k}
-                        onClick={() => press(k)}
-                        className={`h-12 rounded-xl text-base font-semibold transition-colors active:scale-95
-                            ${OPS[k] ? 'bg-surface-3 text-gold' : k === 'C' ? 'bg-surface-3 text-loss' : 'bg-surface-3 text-ink'}`}
-                    >
-                        {k}
-                    </button>
-                ))}
-                <button onClick={() => press('DEL')} aria-label="退格"
-                    className="h-12 rounded-xl bg-surface-3 text-ink-2 grid place-items-center active:scale-95">
-                    <Delete size={18} />
-                </button>
-                <button onClick={() => press('=')}
-                    className="h-12 row-span-1 col-span-1 rounded-xl bg-gold text-ground font-semibold active:scale-95">
-                    =
-                </button>
-            </div>
-        </div>
-    );
-};
-
 // ── 新增／編輯記帳 ──────────────────────────────────────────
 
 export const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, categories, bookId, showToast }) => {
@@ -112,7 +44,6 @@ export const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, catego
     const [type, setType] = useState(initialData?.type || 'expense');
     const [itemName, setItemName] = useState(initialData?.itemName || '');
     const [note, setNote] = useState(initialData?.note || '');
-    const [showKeypad, setShowKeypad] = useState(false);
 
     const availableCats = categories.filter((c) => c.type === type);
     const [category, setCategory] = useState(initialData?.category || (availableCats[0]?.id || ''));
@@ -168,34 +99,14 @@ export const AddExpenseModal = ({ onClose, onSave, onDelete, initialData, catego
             </div>
 
             <Field label="金額">
-                <div className="flex gap-2">
-                    <div className="flex-1 min-w-0">
-                        <AmountInput
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            tone={income ? 'gain' : 'loss'}
-                            autoFocus
-                        />
-                    </div>
-                    <button
-                        onClick={() => setShowKeypad((v) => !v)}
-                        aria-label="計算機"
-                        className={`w-14 shrink-0 rounded-2xl border transition-colors grid place-items-center
-                            ${showKeypad ? 'bg-gold/15 border-gold/40 text-gold' : 'bg-surface-3 border-line text-ink-3'}`}
-                    >
-                        <Calculator size={18} />
-                    </button>
-                </div>
+                <KeypadAmountInput
+                    value={amount}
+                    onChange={setAmount}
+                    tone={income ? 'gain' : 'loss'}
+                    title={income ? '收入金額' : '支出金額'}
+                    autoOpen
+                />
             </Field>
-
-            {showKeypad && (
-                <div className="-mx-5 -mb-1">
-                    <CalculatorKeypad
-                        initialValue={amount}
-                        onResult={(val) => { setAmount(val); setShowKeypad(false); }}
-                    />
-                </div>
-            )}
 
             <Field label="分類">
                 {availableCats.length === 0 ? (
@@ -292,11 +203,11 @@ export const AddGoldModal = ({ onClose, onSave, onDelete, initialData, showToast
                         </button>
                     ))}
                 </div>
-                <AmountInput
+                <KeypadAmountInput
                     value={weightInput}
-                    onChange={(e) => setWeightInput(e.target.value)}
+                    onChange={setWeightInput}
                     prefix=""
-                    autoFocus
+                    title="輸入重量"
                 />
                 {grams > 0 && (
                     <p className="text-[11px] text-ink-3 mt-1.5 tnum">
@@ -361,7 +272,7 @@ export const AddDebtModal = ({ onClose, onSave, onDelete, initialData, bookId, s
             </Field>
 
             <Field label="借款總額">
-                <AmountInput value={amount} onChange={(e) => setAmount(e.target.value)} tone="loss" />
+                <KeypadAmountInput value={amount} onChange={setAmount} tone="loss" title="借款總額" />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -400,7 +311,7 @@ export const AddRepaymentModal = ({ onClose, onSave, targetDebt, formatMoney, sh
             </div>
 
             <Field label="還款金額">
-                <AmountInput value={amount} onChange={(e) => setAmount(e.target.value)} tone="gain" autoFocus />
+                <KeypadAmountInput value={amount} onChange={setAmount} tone="gain" title="還款金額" />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -666,7 +577,7 @@ export const CalibrationModal = ({ onClose, onSave, onReset, shownPrice, calibra
             </div>
 
             <Field label="台銀實際賣出價 / 公克">
-                <AmountInput value={input} onChange={(e) => setInput(e.target.value)} autoFocus />
+                <KeypadAmountInput value={input} onChange={setInput} title="台銀賣出價 / 公克" />
             </Field>
 
             {current && (

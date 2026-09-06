@@ -15,7 +15,7 @@ import CalendarView from '../views/CalendarView.jsx';
 import CategoryManagerView from '../views/CategoryManagerView.jsx';
 import BackupView from '../views/BackupView.jsx';
 import SubscriptionView from '../views/SubscriptionView.jsx';
-import { CalibrationModal, AddSubscriptionModal } from '../modals/index.jsx';
+import { CalibrationModal, AddSubscriptionModal, AddExpenseModal } from '../modals/index.jsx';
 import * as mock from './mockData.js';
 
 const monthKey = getLocalYMD().slice(0, 7);
@@ -77,6 +77,7 @@ export default function Preview() {
     const [selectedDate, setSelectedDate] = useState(getLocalYMD());
     const [showCalib, setShowCalib] = useState(false);
     const [showSubModal, setShowSubModal] = useState(false);
+    const [showExpModal, setShowExpModal] = useState(false);
 
     const money = { formatMoney, formatMoneyOrDash, formatWeight };
 
@@ -120,7 +121,7 @@ export default function Preview() {
                         monthStats={monthStats} dailyExpenses={dailyExpenses} categories={mock.categories}
                         subscriptionStats={subscriptionStats}
                         formatMoney={formatMoney} formatDate={formatDate}
-                        onAdd={noop} onSwap={noop} onOpenSubscriptions={() => setView('subscriptions')}
+                        onAdd={() => setShowExpModal(true)} onSwap={noop} onOpenSubscriptions={() => setView('subscriptions')}
                         setEditingExpense={noop} setShowExpenseAdd={noop} setExpenseToDelete={noop}
                     />
                 )}
@@ -186,6 +187,17 @@ export default function Preview() {
                     />
                 )}
             </main>
+
+            {showExpModal && (
+                <AddExpenseModal
+                    categories={mock.categories}
+                    bookId={mock.books[0].id}
+                    showToast={noop}
+                    onClose={() => setShowExpModal(false)}
+                    onSave={noop}
+                    onDelete={noop}
+                />
+            )}
 
             {showSubModal && (
                 <AddSubscriptionModal
