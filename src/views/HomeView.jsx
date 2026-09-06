@@ -1,5 +1,5 @@
 import React from 'react';
-import { Coins, ArrowUpRight, Landmark, TrendingUp, TrendingDown, Wallet, Plus } from 'lucide-react';
+import { Coins, ArrowUpRight, Landmark, TrendingUp, TrendingDown, Wallet, Plus, RefreshCw } from 'lucide-react';
 import { Card, Figure, DeltaFigure, SectionLabel, EmptyState, Button, Rule } from '../ui/primitives.jsx';
 import { iconFor, colorForIndex } from '../ui/icons.js';
 
@@ -62,6 +62,7 @@ export default function HomeView({
     goldStats, goldPrice, goldHistory, hasGoldPrice,
     monthStats, pieChartData, categories,
     debtStats, activeDebtCount,
+    subscriptionStats,
     recentExpenses,
     currentBookName,
     formatMoney, formatMoneyOrDash, formatWeight,
@@ -181,6 +182,29 @@ export default function HomeView({
                 </section>
             )}
 
+            {/* 訂閱：只有真的有訂閱時才佔版面 */}
+            {subscriptionStats?.activeCount > 0 && (
+                <section className="animate-rise" style={{ animationDelay: '150ms' }}>
+                    <SectionLabel>訂閱</SectionLabel>
+                    <Card
+                        onClick={() => onNavigate('subscriptions')}
+                        className="p-4 flex items-center gap-3 cursor-pointer transition-transform active:scale-[0.99]"
+                    >
+                        <span className="w-9 h-9 rounded-xl bg-surface-3 text-ink-2 grid place-items-center shrink-0">
+                            <RefreshCw size={16} />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-ink">每月訂閱</p>
+                            <p className="text-[11px] text-ink-3 mt-0.5">
+                                {subscriptionStats.activeCount} 項 · 一年 {formatMoney(Math.round(subscriptionStats.yearly))}
+                            </p>
+                        </div>
+                        <Figure size="md">{formatMoney(Math.round(subscriptionStats.monthly))}</Figure>
+                        <ArrowUpRight size={16} className="text-ink-3 shrink-0" />
+                    </Card>
+                </section>
+            )}
+
             {/* 最近紀錄 */}
             <section className="animate-rise" style={{ animationDelay: '180ms' }}>
                 <SectionLabel
@@ -189,6 +213,7 @@ export default function HomeView({
                             全部
                         </button>
                     }
+                    className="animate-rise"
                 >
                     最近
                 </SectionLabel>

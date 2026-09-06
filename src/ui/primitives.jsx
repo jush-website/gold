@@ -1,5 +1,8 @@
 import React from 'react';
-import { X, Loader2, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Loader2, ChevronRight, Keyboard } from 'lucide-react';
+import NumericKeypad from './NumericKeypad.jsx';
+import { toDisplay } from '../../lib/keypad.js';
 
 // ── 版面 ────────────────────────────────────────────────────
 
@@ -146,6 +149,27 @@ export const Segmented = ({ options, value, onChange, className = '' }) => (
     </div>
 );
 
+// 開關。用在「自動記帳」「啟用／暫停」這類是非設定。
+export const Toggle = ({ checked, onChange, label, hint }) => (
+    <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="w-full flex items-center gap-3 text-left"
+    >
+        <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-ink">{label}</span>
+            {hint && <span className="block text-[11px] text-ink-3 mt-0.5 leading-relaxed">{hint}</span>}
+        </span>
+        <span className={`shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors duration-200
+            ${checked ? 'bg-gold' : 'bg-surface-3 border border-line'}`}>
+            <span className={`block w-5 h-5 rounded-full transition-transform duration-200
+                ${checked ? 'translate-x-5 bg-ground' : 'translate-x-0 bg-ink-3'}`} />
+        </span>
+    </button>
+);
+
 // ── 空狀態 ──────────────────────────────────────────────────
 
 export const EmptyState = ({ icon: Icon, title, hint, action }) => (
@@ -207,25 +231,51 @@ export const inputClass =
      placeholder:text-ink-3 outline-none transition-colors
      focus:border-gold/50 focus:ring-2 focus:ring-gold/15`;
 
-// 大金額輸入（新增記帳、新增還款的主要欄位）
-export const AmountInput = ({ value, onChange, tone = 'gold', prefix = '$', ...rest }) => {
-    const toneRing = {
-        gold: 'focus-within:border-gold/50 focus-within:ring-gold/15 text-gold',
-        gain: 'focus-within:border-gain/50 focus-within:ring-gain/15 text-gain',
-        loss: 'focus-within:border-loss/50 focus-within:ring-loss/15 text-loss',
+// 金額輸入，但改叫 App 自己的數字鍵盤。
+// 欄位本身是 <button> 不是 <input>，手機系統鍵盤因此完全不會被喚起 ——
+// 這正是重點：系統鍵盤的數字鍵太小、容易誤觸。
+export const KeypadAmountInput = ({
+    value, onChange, tone = 'gold', prefix = '$', title = '輸入金額',
+    allowDecimal = true, autoOpen = false,
+}) => {
+    // autoOpen 取代原本的 autoFocus：這些欄位以前一打開表單就會自動彈出
+    // 系統鍵盤，現在改成自動彈出 App 自己的鍵盤，行為一致。
+    const [open, setOpen] = React.useState(autoOpen);
+    const toneClass = {
+        gold: { text: 'text-gold', ring: 'border-gold/50 ring-2 ring-gold/15' },
+        gain: { text: 'text-gain', ring: 'border-gain/50 ring-2 ring-gain/15' },
+        loss: { text: 'text-loss', ring: 'border-loss/50 ring-2 ring-loss/15' },
     }[tone];
+
     return (
-        <div className={`flex items-baseline gap-2 bg-surface-3 border border-line rounded-2xl px-4 py-3.5
-            transition-colors focus-within:ring-2 ${toneRing}`}>
-            <span className="text-lg font-semibold opacity-50">{prefix}</span>
-            <input
-                value={value}
-                onChange={onChange}
-                inputMode="decimal"
-                placeholder="0"
-                className="flex-1 min-w-0 bg-transparent outline-none figure text-3xl font-semibold placeholder:opacity-30"
-                {...rest}
-            />
-        </div>
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className={`w-full flex items-baseline gap-2 bg-surface-3 border rounded-2xl px-4 py-3.5
+                    text-left transition-colors ${toneClass.text}
+                    ${open ? toneClass.ring : 'border-line'}`}
+            >
+                <span className="text-lg font-semibold opacity-50">{prefix}</span>
+                <span className={`flex-1 min-w-0 truncate figure text-3xl font-semibold
+                    ${value === '' || value == null ? 'opacity-30' : ''}`}>
+                    {value === '' || value == null ? '0' : toDisplay(value)}
+                </span>
+                <span className="shrink-0 text-ink-3"><Keyboard size={17} /></span>
+            </button>
+
+            {/* 用 portal 掛到 body：Field 是 <label>，鍵盤若留在它底下，
+                每按一個鍵都會連帶觸發上面那顆欄位按鈕，無障礙名稱也會被鍵盤內容灌爆。 */}
+            {open && createPortal(
+                <NumericKeypad
+                    value={value}
+                    onChange={onChange}
+                    onClose={() => setOpen(false)}
+                    title={title}
+                    allowDecimal={allowDecimal}
+                />,
+                document.body,
+            )}
+        </>
     );
 };

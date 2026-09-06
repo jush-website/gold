@@ -83,3 +83,13 @@ export const goldIntraday = Array.from({ length: 32 }, (_, i) => {
 });
 
 export const user = { uid: 'preview-user', displayName: '預覽帳號', email: 'preview@example.com' };
+
+// 訂閱：刻意混合不同週期，才看得出「換算成月均」的價值
+export const subscriptions = [
+    { id: 's1', name: 'Netflix', amount: 390, cycle: 'monthly', nextBillingDate: daysAgo(-3), categoryId: 'c5', bookId: 'b1', autoLog: true, active: true, autoLogFrom: daysAgo(200), createdAt: ts(4800) },
+    { id: 's2', name: 'iCloud 2TB', amount: 300, cycle: 'monthly', nextBillingDate: daysAgo(-12), categoryId: 'c2', bookId: 'b1', autoLog: true, active: true, autoLogFrom: daysAgo(300), createdAt: ts(7200) },
+    { id: 's3', name: 'Adobe 攝影計畫', amount: 3588, cycle: 'yearly', nextBillingDate: daysAgo(-45), categoryId: 'c3', bookId: 'b1', autoLog: true, active: true, autoLogFrom: daysAgo(320), createdAt: ts(7680) },
+    { id: 's4', name: 'Spotify', amount: 149, cycle: 'monthly', nextBillingDate: daysAgo(0), categoryId: 'c5', bookId: 'b1', autoLog: true, active: true, autoLogFrom: daysAgo(150), createdAt: ts(3600) },
+    { id: 's5', name: '健身房', amount: 2400, cycle: 'quarterly', nextBillingDate: daysAgo(-20), categoryId: 'c2', bookId: 'b1', autoLog: false, active: true, autoLogFrom: daysAgo(90), createdAt: ts(2160) },
+    { id: 's6', name: 'YouTube Premium', amount: 179, cycle: 'monthly', nextBillingDate: daysAgo(-8), categoryId: 'c5', bookId: 'b1', autoLog: true, active: false, autoLogFrom: daysAgo(400), createdAt: ts(9600) },
+];
