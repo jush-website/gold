@@ -1,13 +1,17 @@
 import React from 'react';
-import { Plus, Coffee, ArrowUpDown } from 'lucide-react';
+import { Plus, Coffee, ArrowUpDown, RefreshCw, ChevronRight } from 'lucide-react';
 import { Card, Figure, DeltaFigure, EmptyState, Button, Rule } from '../ui/primitives.jsx';
 import SortableDayGroup from './SortableDayGroup.jsx';
 
 export default function ExpenseView({
     monthStats, dailyExpenses, categories,
+    subscriptionStats,
     formatMoney, formatDate,
-    onAdd, onSwap, setEditingExpense, setShowExpenseAdd, setExpenseToDelete,
+    onAdd, onSwap, onOpenSubscriptions,
+    setEditingExpense, setShowExpenseAdd, setExpenseToDelete,
 }) {
+    const subsMonthly = Math.round(subscriptionStats?.monthly || 0);
+    const subsActive = subscriptionStats?.activeCount || 0;
     return (
         <div className="h-full flex flex-col">
             {/* 本月摘要固定在上方，滑動清單時仍看得到結餘 */}
@@ -38,6 +42,33 @@ export default function ExpenseView({
                         </span>
                     </div>
                 </Card>
+
+                {/* 訂閱是「已經決定好、每個月自己會跑」的支出，跟手動記的一筆一筆不同，
+                    所以入口放在記帳頁但獨立成一列；實際扣款仍會寫成一般記帳紀錄，
+                    月支出才算得準。 */}
+                <button
+                    onClick={onOpenSubscriptions}
+                    className="w-full mt-2.5 flex items-center gap-3 px-4 py-3 rounded-2xl
+                        bg-surface border border-line text-left transition-colors
+                        hover:bg-surface-2 active:bg-surface-2"
+                >
+                    <span className="w-8 h-8 rounded-xl bg-surface-3 text-ink-2 grid place-items-center shrink-0">
+                        <RefreshCw size={15} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-ink">訂閱管理</span>
+                        <span className="block text-[11px] text-ink-3 mt-0.5 truncate">
+                            {subsActive > 0 ? `${subsActive} 個訂閱中` : '把每月固定扣款的服務加進來'}
+                        </span>
+                    </span>
+                    {subsActive > 0 && (
+                        <span className="text-right shrink-0">
+                            <span className="block text-[10px] text-ink-3">每月</span>
+                            <Figure size="xs" tone="muted">{formatMoney(subsMonthly)}</Figure>
+                        </span>
+                    )}
+                    <ChevronRight size={16} className="text-ink-3 shrink-0" />
+                </button>
             </div>
 
             <div id="expense-scroll-container" className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-28 space-y-5">

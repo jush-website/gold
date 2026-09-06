@@ -118,8 +118,9 @@ export default function Preview() {
                 {view === 'expense' && (
                     <ExpenseView
                         monthStats={monthStats} dailyExpenses={dailyExpenses} categories={mock.categories}
+                        subscriptionStats={subscriptionStats}
                         formatMoney={formatMoney} formatDate={formatDate}
-                        onAdd={noop} onSwap={noop}
+                        onAdd={noop} onSwap={noop} onOpenSubscriptions={() => setView('subscriptions')}
                         setEditingExpense={noop} setShowExpenseAdd={noop} setExpenseToDelete={noop}
                     />
                 )}

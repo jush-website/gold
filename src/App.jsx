@@ -1068,6 +1068,8 @@ export default function App() {
                             setShowExpenseAdd(true);
                         }}
                         onSwap={handleExpenseSwap}
+                        subscriptionStats={subscriptionStats}
+                        onOpenSubscriptions={() => navigateTo('subscriptions')}
                         setEditingExpense={setEditingExpense}
                         setShowExpenseAdd={setShowExpenseAdd}
                         setExpenseToDelete={setExpenseToDelete}
